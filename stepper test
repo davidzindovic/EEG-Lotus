@@ -3,11 +3,11 @@
 #define PIN_STEP1_DIRECTION 3
 #define PIN_STEP1_STEP 4
 
-//Button pin definitions
-//#define PIN_BUTTON_1 21
-//#define PIN_BUTTON_2 22
+// hitrost vrtenja 1000<
+// smer vrtenja: +=counter clockwise (top view)
+// stevilo korakov: ne previsoko?
 
-//#define CAJTVMES 3000
+
 
 //Stepper driver variables
 int stepsPerSecond = 0;
@@ -15,14 +15,15 @@ int currentPosition = 0;
 
 int cajt_zdej=0;
 const unsigned long cajt_vmes = 3000;
-int timebuff=1;
+bool timebuff=true;
+
+unsigned long MillisNow=0;
+unsigned int pozicija=0;
+
+int test=2000;
 
 void setup()
 {
-    //Set both buttons as INPUT_PULLUP so we can detect when they are pressed
-    //pinMode(PIN_BUTTON_1, INPUT_PULLUP);
-    //pinMode(PIN_BUTTON_2, INPUT_PULLUP);
-
     //Condifure stepper driver pins as OUTPUTs
     pinMode(PIN_STEP1_DIRECTION, OUTPUT);
     pinMode(PIN_STEP1_STEP, OUTPUT);
@@ -30,36 +31,25 @@ void setup()
 
     //ENABLE pin has to be pulled LOW for TCM2209 used in this example to enable the driver
     digitalWrite(PIN_STEP_ENABLE, LOW);
-  //stepsPerSecond=1000;
 }
 
 void loop()
 {
-    //Check if the button is pressed
-    /*if (digitalRead(PIN_BUTTON_1) == LOW) {
-        //Forward direction
-        stepsPerSecond = 5000;
-    } else if (digitalRead(PIN_BUTTON_2) == LOW) {
-        //Backward direction
-        stepsPerSecond = -5000;    
-    } else {
-        //If non of the buttons is pressed, set stepsPerSecond to 0
-        stepsPerSecond = 0;
-    }
-*/
 
-const unsigned long MillisNow = millis();
+vrtenje(test,true,test*10);
+//test+=100;
+// delay(500);
+ 
+}
 
-  if((MillisNow-cajt_zdej)>cajt_vmes)
-  {
-    timebuff++;
-   cajt_zdej=millis();
-   //stepsPerSecond = -stepsPerSecond;
-  }
-if(timebuff%2==0) stepsPerSecond = 1000;
-else stepsPerSecond = -1000;
+void vrtenje(int hitrost, bool smer, int stevilo_korakov)
+{
+
+if(smer) stepsPerSecond = hitrost;
+else stepsPerSecond = -hitrost;
   
-
+for(int i=stevilo_korakov;i>0;--i)
+{
     static unsigned long nextChange = 0;
     static uint8_t currentState = LOW;
     if (stepsPerSecond == 0)
@@ -80,13 +70,13 @@ else stepsPerSecond = -1000;
                 currentState = HIGH;
                 nextChange = micros() + 30;
 
-                if (stepsPerSecond > 0)
+                if ((stepsPerSecond > 0) && (pozicija < 65535))
                 {
-                    currentPosition++;
+                    pozicija++;
                 }
-                else if (stepsPerSecond < 0)
+                else if ((stepsPerSecond < 0) && (pozicija>0))
                 {
-                    currentPosition--;
+                    pozicija--;
                 }
             }
             else
@@ -109,4 +99,9 @@ else stepsPerSecond = -1000;
             digitalWrite(PIN_STEP1_STEP, currentState);
         }
     }
-}
+
+
+}       
+        digitalWrite(PIN_STEP1_STEP, LOW);
+        //return pozicija;  
+        }
