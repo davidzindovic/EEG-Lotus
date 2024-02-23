@@ -7,8 +7,8 @@
 // smer vrtenja: +=counter clockwise (top view)
 // stevilo korakov: ne previsoko?
 
-
-
+// 1000x loop: 2000hitrost,2000korakov -> 12s vrtenja
+// 1obrat motorja: 2000hitrost,2000 korakov -> 70 ponovitev
 //Stepper driver variables
 int stepsPerSecond = 0;
 int currentPosition = 0;
@@ -28,7 +28,7 @@ void setup()
     pinMode(PIN_STEP1_DIRECTION, OUTPUT);
     pinMode(PIN_STEP1_STEP, OUTPUT);
     pinMode(PIN_STEP_ENABLE, OUTPUT);
-
+    Serial.begin(9600);
     //ENABLE pin has to be pulled LOW for TCM2209 used in this example to enable the driver
     digitalWrite(PIN_STEP_ENABLE, LOW);
 }
@@ -36,9 +36,9 @@ void setup()
 void loop()
 {
 
-vrtenje(test,true,test*10);
-//test+=100;
-// delay(500);
+for(int a=0;a<70;a++)vrtenje(test,true,test); //en obrat
+Serial.println(pozicija);
+delay(1000);
  
 }
 
@@ -47,11 +47,15 @@ void vrtenje(int hitrost, bool smer, int stevilo_korakov)
 
 if(smer) stepsPerSecond = hitrost;
 else stepsPerSecond = -hitrost;
+
   
 for(int i=stevilo_korakov;i>0;--i)
 {
+   if (((stepsPerSecond > 0) && (pozicija < 65535))||((stepsPerSecond < 0) && (pozicija>0)))
+   {
     static unsigned long nextChange = 0;
     static uint8_t currentState = LOW;
+
     if (stepsPerSecond == 0)
     {
         //if speed is 0, set the step pin to LOW to keep current position
@@ -101,7 +105,7 @@ for(int i=stevilo_korakov;i>0;--i)
     }
 
 
-}       
+}   }    
         digitalWrite(PIN_STEP1_STEP, LOW);
         //return pozicija;  
         }
