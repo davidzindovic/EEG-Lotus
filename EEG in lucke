@@ -1,0 +1,70 @@
+// kar je zakomentirano je poskus gradienta barv (bi moral delat)
+
+#include <Mindwave.h>
+#include <Adafruit_NeoPixel.h>
+
+//#define MINDWAVE_BAUDRATE 57600
+#define PIXEL_PIN 6
+#define PIXEL_COUNT 17
+
+Mindwave mindwave;
+Adafruit_NeoPixel strip(PIXEL_COUNT, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+int ponovitve=0; int meditacija; int fokus; int fokus_prej;
+int pozornost_red;int pozornost_green;int pozornost_blue;
+int pozornost_prej_red;int pozornost_prej_green;int pozornost_prej_blue;
+int korak;
+
+void setup() {
+  strip.begin(); // Initialize NeoPixel strip object (REQUIRED)
+  strip.show();  // Initialize all pixels to 'off'
+  Serial.begin(MINDWAVE_BAUDRATE);
+
+}
+void onMindwaveData() {
+
+  if (ponovitve==0)ponovitve++;
+  else fokus_prej=fokus;
+
+  meditacija = map(mindwave.meditation(), 0, 100, 0, 255);
+  fokus = map(mindwave.attention(), 0, 100, 0, 255);
+  
+  Serial.print("\tattention: ");
+  Serial.print(fokus);
+  Serial.print("\tmeditation: ");
+  Serial.print(meditacija);
+  Serial.println();
+  
+  if(fokus!=fokus_prej)lucke(fokus,fokus_prej);
+}
+
+void lucke(int pozornost, int pozornost_prej)
+{//barvna skala: 1-30:rdeča,31-70:zelena,71-100:modra
+
+/*  if (pozornost<(255/3)){ pozornost_red=pozornost; pozornost_green=0; pozornost_blue=0;}
+  else if (pozornost>(255/3) && pozornost<(255*2/3)){ pozornost_red=0; pozornost_green=pozornost; pozornost_blue=0;}
+  else if (pozornost<(255/3)){ pozornost_red=0; pozornost_green=0; pozornost_blue=pozornost;}
+
+  if (pozornost_prej<(255/3)){ pozornost_prej_red=pozornost_prej; pozornost_prej_green=0; pozornost_prej_blue=0;}
+  else if (pozornost_prej>(255/3) && pozornost_prej<(255*2/3)){ pozornost_prej_red=0; pozornost_prej_green=pozornost_prej; pozornost_prej_blue=0;}
+  else if (pozornost_prej<(255/3)){ pozornost_prej_red=0; pozornost_prej_green=0; pozornost_prej_blue=pozornost_prej;}
+  
+  korak=max(max(pozornost_red-pozornost_prej_red,pozornost_green-pozornost_prej_green),pozornost_blue-pozornost_prej_blue);
+*/    
+  //for(int razlika=0; razlika<korak;razlika++)
+  //for(int razlika=0; razlika<(pozornost-pozornost_prej);razlika++)
+  //{
+    strip.clear();
+    for (int i = 0; i < PIXEL_COUNT; i++)
+    {
+     // strip.setPixelColor(i, pozornost_prej_red+razlika*(pozornost_red-pozornost_prej_red)/korak, pozornost_prej_green+razlika*(pozornost_green-pozornost_prej_green)/korak, pozornost_prej_blue+razlika*(pozornost_blue-pozornost_prej_blue)/korak);
+   strip.setPixelColor(i, pozornost*(pozornost<255/3),pozornost*(pozornost>(255/3) && pozornost<(255*2/3)), pozornost*(pozornost>(255*2/3)));
+
+    }
+    strip.show();
+  //}
+   
+}
+
+void loop() {
+  mindwave.update(Serial, onMindwaveData);
+}
