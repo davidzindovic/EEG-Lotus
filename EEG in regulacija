@@ -1,0 +1,56 @@
+// kar je zakomentirano je poskus gradienta barv (bi moral delat)
+
+#include <Mindwave.h>
+
+//#define MINDWAVE_BAUDRATE 57600
+#define MAX_SPREMEMBA 16 // prilagajaš glede na navor,(100/(MAX_ST_OBRATOV/ST_OBRATOV_NA_S)
+#define ST_OBRATOV_NA_S 1
+#define MAX_ST_OBRATOV 6
+//npr. omejitev da je 1obr/s najvec
+
+Mindwave mindwave;
+
+int meditacija; int meditacija_prej=0;
+bool first=false;
+void setup() {
+ 
+  Serial.begin(MINDWAVE_BAUDRATE);
+
+}
+
+void onMindwaveData() {
+
+  meditacija = map(mindwave.meditation(), 0, 100, 0, 255);
+  //fokus = map(mindwave.attention(), 0, 100, 0, 255);
+  // dodaj postanje v google sheets za statistiko
+  
+  //Serial.print("\tattention: ");
+  //Serial.print(fokus);
+  //Serial.print("\tmeditation: ");
+  //Serial.print(meditacija);
+  //Serial.println();
+if(first!=false || meditacija!=0)
+{
+ if (first==false)
+  {
+  if(meditacija!=meditacija_prej)regulacija(meditacija_prej,meditacija);
+  first=!first;
+  }
+ else
+  {
+   meditacija=(meditacija-(meditacija-meditacija_prej)/2
+   meditacija_prej=meditacija;
+  }
+}
+}
+
+void regulacija(unsigned int trenutno_stanje, unsigned int regluacijsko_povprecje)
+{
+ if(abs(regulacijsko_povprecje-trenutno_stanje)>MAX_SPREMEMBA) delta_motor=MAX_SPREMEMBA;
+ else delta_motor=regulacijsko_povprecje-trenutno_stanje;
+}
+
+
+void loop() {
+  mindwave.update(Serial, onMindwaveData);
+}
