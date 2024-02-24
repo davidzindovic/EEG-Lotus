@@ -3,14 +3,15 @@
 #include <Mindwave.h>
 
 //#define MINDWAVE_BAUDRATE 57600
-#define MAX_SPREMEMBA 16 // prilagajaš glede na navor,(100/(MAX_ST_OBRATOV/ST_OBRATOV_NA_S)
+#define MAX_SPREMEMBA 8 // prilagajaš glede na navor,(100/(MAX_ST_OBRATOV/ST_OBRATOV_NA_S)
 #define ST_OBRATOV_NA_S 1
 #define MAX_ST_OBRATOV 6
 //npr. omejitev da je 1obr/s najvec
 
 Mindwave mindwave;
 
-int meditacija; int meditacija_prej=0;
+int meditacija; int meditacija_prej=0; int regulacijsko_povprecje;
+int motor;int delta_motor;
 bool first=false;
 void setup() {
  
@@ -20,34 +21,46 @@ void setup() {
 
 void onMindwaveData() {
 
-  meditacija = map(mindwave.meditation(), 0, 100, 0, 255);
+  meditacija = mindwave.meditation();
   //fokus = map(mindwave.attention(), 0, 100, 0, 255);
   // dodaj postanje v google sheets za statistiko
   
   //Serial.print("\tattention: ");
   //Serial.print(fokus);
   //Serial.print("\tmeditation: ");
-  //Serial.print(meditacija);
+  //Serial.println(meditacija);
   //Serial.println();
-if(first!=false || meditacija!=0)
+regulacija(meditacija);
+
+}
+
+void regulacija(unsigned int trenutno_stanje)
+{
+
+if(first!=false || trenutno_stanje!=0)
 {
  if (first==false)
   {
-  if(meditacija!=meditacija_prej)regulacija(meditacija_prej,meditacija);
+  if(trenutno_stanje!=meditacija_prej)meditacija_prej=trenutno_stanje;//regulacija(meditacija_prej,trenutno_stanje);
   first=!first;
   }
  else
   {
-   meditacija=(meditacija-(meditacija-meditacija_prej)/2
-   meditacija_prej=meditacija;
+   if(trenutno_stanje>meditacija_prej)regulacijsko_povprecje=(trenutno_stanje-(trenutno_stanje-meditacija_prej)/2);
+   else regulacijsko_povprecje=(trenutno_stanje+(-trenutno_stanje+meditacija_prej)/2);
+   meditacija_prej=trenutno_stanje;
   }
 }
-}
 
-void regulacija(unsigned int trenutno_stanje, unsigned int regluacijsko_povprecje)
-{
- if(abs(regulacijsko_povprecje-trenutno_stanje)>MAX_SPREMEMBA) delta_motor=MAX_SPREMEMBA;
- else delta_motor=regulacijsko_povprecje-trenutno_stanje;
+ if(abs(regulacijsko_povprecje-motor)>MAX_SPREMEMBA) delta_motor=MAX_SPREMEMBA*(regulacijsko_povprecje-motor)/abs(regulacijsko_povprecje-motor);
+ else delta_motor=regulacijsko_povprecje-motor;
+
+motor+=delta_motor;
+Serial.print(trenutno_stanje);
+Serial.print(",");
+Serial.print(regulacijsko_povprecje);
+Serial.print(",");
+Serial.println(motor);
 }
 
 
