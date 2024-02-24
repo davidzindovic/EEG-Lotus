@@ -1,0 +1,44 @@
+#define MAX_SPREMEMBA 8
+
+// uporabi Serial Plotter
+
+bool first=false;
+int meditacija; int meditacija_prej=0;int meditacija_reg; int delta_motor;int motor=0;
+
+void setup() {
+  // put your setup code here, to run once:
+Serial.begin(57600);
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+randomSeed(analogRead(A0));
+meditacija=random(0,101);
+
+if(first!=false || meditacija!=0)
+{
+ if (first==false)
+  {
+  if(meditacija!=meditacija_prej)meditacija_prej=meditacija;//regulacija(meditacija_prej,meditacija);
+  first=!first;
+  }
+ else
+  {
+   meditacija_reg=(meditacija-(meditacija-meditacija_prej)/2);
+   meditacija_prej=meditacija;
+  }
+}
+//if(motor<(meditacija_reg*(1-TOLERANCA)) && motor>(meditacija_reg*(1+TOLERANCA)))
+ 
+  if(abs(meditacija_reg-motor)>MAX_SPREMEMBA) delta_motor=MAX_SPREMEMBA*(meditacija_reg-motor)/abs(meditacija_reg-motor);
+  else delta_motor=meditacija_reg-motor;
+
+motor+=delta_motor;
+
+Serial.print(meditacija);
+Serial.print(",");
+Serial.print(meditacija_reg);
+Serial.print(",");
+Serial.println(motor);
+delay(500);
+}
