@@ -1,0 +1,18 @@
+driver - arduino
+
+gnd - gnd
+vio - 5v
+m1b modra motor
+m1a rdeča motor
+m2a črna motor
+m2b zelena motor
+gnd gnd napajanje
+vm + napajanje
+
+
+dir - 3
+step - 4
+en - 2
+
+cap med +- pwr
+gnd napajanje in arduino skupaj
