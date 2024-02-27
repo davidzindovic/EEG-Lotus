@@ -23,7 +23,7 @@ bool timebuff=true;
 unsigned long MillisNow=0;
 unsigned int pozicija=0;
 
-int test=2000;
+int test=2000; // nizja vrednost->nizja hitrost (ker je to steps per second; pazi stevilo korakov!);
 
 void setup()
 {
