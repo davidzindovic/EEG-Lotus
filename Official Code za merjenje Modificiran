@@ -5,6 +5,8 @@
 // license free.
 ////////////////////////////////////////////////////////////////////////
 
+https://www.instructables.com/Brainwaves-Fly-a-Drone/
+
 #define BAUDRATE 57600
 #define DEBUGOUTPUT 0
 
