@@ -1,0 +1,134 @@
+//Stepper driver pin definitions
+#define PIN_STEP_ENABLE 2
+#define PIN_STEP1_DIRECTION 3
+#define PIN_STEP1_STEP 4
+#define LEVA_TIPKA 6
+#define DESNA_TIPKA 5
+
+// hitrost vrtenja 1000<
+// smer vrtenja: +=counter clockwise (top view)
+// stevilo korakov: ne previsoko?
+
+// 1000x loop: 2000hitrost,2000korakov -> 12s vrtenja
+// 1obrat motorja: 2000hitrost,2000 korakov -> 70 ponovitev
+
+// tabela: https://docs.google.com/spreadsheets/d/1mXC9NtUcmb5qxF8q9yrEkETGKaCZRoi_bkPnZ9u1SfU/edit?usp=sharing
+
+//Stepper driver variables
+int stepsPerSecond = 0;
+int currentPosition = 0;
+
+int cajt_zdej=0;
+const unsigned long cajt_vmes = 3000;
+bool timebuff=true;
+
+unsigned long MillisNow=0;
+unsigned int pozicija=0;
+
+int test=2000; // nizja vrednost->nizja hitrost (ker je to steps per second; pazi stevilo korakov!);
+
+void setup()
+{
+    //Condifure stepper driver pins as OUTPUTs
+    pinMode(PIN_STEP1_DIRECTION, OUTPUT);
+    pinMode(PIN_STEP1_STEP, OUTPUT);
+    pinMode(PIN_STEP_ENABLE, OUTPUT);
+    pinMode(LEVA_TIPKA,INPUT_PULLUP);
+    pinMode(DESNA_TIPKA,INPUT_PULLUP);
+    Serial.begin(9600);
+    //ENABLE pin has to be pulled LOW for TCM2209 used in this example to enable the driver
+    digitalWrite(PIN_STEP_ENABLE, LOW);
+}
+
+void loop()
+{
+bool leva_tipka=digitalRead(LEVA_TIPKA);
+bool desna_tipka=digitalRead(DESNA_TIPKA);
+
+if(!leva_tipka && desna_tipka) //če je leva prižgana in desna ne
+{
+  Serial.println("vrtim levo");
+  for(int a=0;a<10;a++)vrtenje(test,true,test);
+}
+else if(leva_tipka && !desna_tipka)
+{
+  Serial.println("vrtim desno");
+  for(int a=0;a<10;a++)vrtenje(test,false,test);
+}
+/*
+for(int a=0;a<500;a++)vrtenje(test,true,test); //en obrat
+//Serial.println(pozicija);
+delay(1000);
+for(int a=0;a<500;a++)vrtenje(test,false,test); //en obrat 
+delay(1000);
+*/
+}
+
+void vrtenje(int hitrost, bool smer, int stevilo_korakov)
+{
+
+if(smer) stepsPerSecond = hitrost;
+else stepsPerSecond = -hitrost;
+
+  
+for(int i=stevilo_korakov;i>0;--i)
+{
+ //  if (((stepsPerSecond > 0) && (pozicija < 9534))||((stepsPerSecond < 0) && (pozicija>0)))
+  // {
+     static unsigned long nextChange = 0;
+     static uint8_t currentState = LOW;
+
+    if (stepsPerSecond == 0)
+    {
+        //if speed is 0, set the step pin to LOW to keep current position
+        currentState = LOW;
+        digitalWrite(PIN_STEP1_STEP, LOW);
+    }
+    else
+    {
+        //if stepsPerSecond is not 0, then we need to calculate the next time to change the state of the driver
+        if (micros() > nextChange)
+        {
+
+            //Generate steps
+            if (currentState == LOW)
+            {
+                currentState = HIGH;
+                nextChange = micros() + 30;
+
+              /*  if ((stepsPerSecond > 0) && (pozicija < 65535))
+                {
+                    pozicija++;
+                }
+                else if ((stepsPerSecond < 0) && (pozicija>0))
+                {
+                    pozicija--;
+                }
+*/
+            }
+            else
+            {
+                currentState = LOW;
+                nextChange = micros() + (1000 * abs(1000.0f / stepsPerSecond)) - 30;
+            }
+
+            //Set direction based on the sign of stepsPerSecond
+            if (stepsPerSecond > 0)
+            {
+                digitalWrite(PIN_STEP1_DIRECTION, LOW);
+            }
+            else
+            {
+                digitalWrite(PIN_STEP1_DIRECTION, HIGH);
+            }
+
+            //Write out the step pin
+            digitalWrite(PIN_STEP1_STEP, currentState);
+        }
+    }
+
+
+}   //}    
+        digitalWrite(PIN_STEP1_STEP, LOW);
+        //return pozicija;  
+        }
