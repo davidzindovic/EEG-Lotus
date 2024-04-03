@@ -35,7 +35,7 @@ void setup()
     pinMode(PIN_STEP_ENABLE, OUTPUT);
     pinMode(LEVA_TIPKA,INPUT_PULLUP);
     pinMode(DESNA_TIPKA,INPUT_PULLUP);
-    Serial.begin(9600);
+    //Serial.begin(9600);
     //ENABLE pin has to be pulled LOW for TCM2209 used in this example to enable the driver
     digitalWrite(PIN_STEP_ENABLE, LOW);
 }
@@ -45,15 +45,21 @@ void loop()
 bool leva_tipka=digitalRead(LEVA_TIPKA);
 bool desna_tipka=digitalRead(DESNA_TIPKA);
 
-if(!leva_tipka && desna_tipka) //če je leva prižgana in desna ne
+while(!leva_tipka && desna_tipka) //če je leva prižgana in desna ne
 {
-  Serial.println("vrtim levo");
-  for(int a=0;a<10;a++)vrtenje(test,true,test);
+  //Serial.println("vrtim levo");
+  //for(int a=0;a<10;a++)
+  leva_tipka=digitalRead(LEVA_TIPKA);
+  desna_tipka=digitalRead(DESNA_TIPKA);
+  vrtenje(test,true,test);
 }
-else if(leva_tipka && !desna_tipka)
+while(leva_tipka && !desna_tipka)
 {
-  Serial.println("vrtim desno");
-  for(int a=0;a<10;a++)vrtenje(test,false,test);
+  //Serial.println("vrtim desno");
+  //for(int a=0;a<10;a++)
+  leva_tipka=digitalRead(LEVA_TIPKA);
+  desna_tipka=digitalRead(DESNA_TIPKA);
+  vrtenje(test,false,test);
 }
 /*
 for(int a=0;a<500;a++)vrtenje(test,true,test); //en obrat
