@@ -42,23 +42,17 @@ void setup()
 
 void loop()
 {
-bool leva_tipka=digitalRead(LEVA_TIPKA);
-bool desna_tipka=digitalRead(DESNA_TIPKA);
 
-while(!leva_tipka && desna_tipka) //če je leva prižgana in desna ne
+while(!digitalRead(LEVA_TIPKA) && digitalRead(DESNA_TIPKA)) //če je leva prižgana in desna ne
 {
   //Serial.println("vrtim levo");
   //for(int a=0;a<10;a++)
-  leva_tipka=digitalRead(LEVA_TIPKA);
-  desna_tipka=digitalRead(DESNA_TIPKA);
   vrtenje(test,true,test);
 }
-while(leva_tipka && !desna_tipka)
+while(digitalRead(LEVA_TIPKA) && !digitalRead(DESNA_TIPKA))
 {
   //Serial.println("vrtim desno");
   //for(int a=0;a<10;a++)
-  leva_tipka=digitalRead(LEVA_TIPKA);
-  desna_tipka=digitalRead(DESNA_TIPKA);
   vrtenje(test,false,test);
 }
 /*
