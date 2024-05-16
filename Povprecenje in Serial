@@ -1,0 +1,43 @@
+void setup() {
+  // put your setup code here, to run once:
+
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+uint8_t STmeritev=30;
+uint8_t meritve[STmeritev]=[];
+uint8_t meja_za_ok_meritve=90;
+uint8_t povprecno odstopanje=255;
+uint8_t max_povp_odstopanje=5;
+uint32_t n=0;
+
+while(1)
+{ 
+  ....
+  //povozi outdated vrednosti:
+  meritve[n-(n/30)*30]=prebrana_vrednost(); 
+  premik_roze();
+  uint32_t vsota_meritev=0;
+  for (uint8_t i=0;i<STmeritev;i++)
+  {
+    vsota_meritev+=meritve[i];
+  }
+  uint32_t povprecje_meritev=vsota_razlik/STmeritev;
+  uint32_t odstopanje=0;
+  for (uint8_t m=0;i<STmeritev;i++)
+  {
+    odstopanje+=meritve[i]-povprecje_meritev;
+  }
+  povprecno_odstopanje=odstopanje/STmeritev;
+  // povprecje gledamo po vsaj 30 (STmeritev) meritvah
+  if(n>STmeritev && (abs(povprecno_odstopanje)<=max_povp_odstopanje))konec_poskusa();
+  n++;
+}
+}
+//lahko tudi sproti pljuva na serial in na koncu samo drgac oznaci
+//mogoce se bolsa ideja, za sprobat casovna zahtevnost
+void konec_poskusa(void)
+{
+  vrze na serial
+}
