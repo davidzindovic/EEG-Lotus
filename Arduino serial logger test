@@ -1,0 +1,39 @@
+/*
+*Simple sketch to demonstrate sending data over Serial to a computer
+*Computer recieves data and writes to a CSV file
+*Computer uses pySerial to receive and transmit data
+*This example uses interger variable, other data types are possible
+*/
+uint8_t counter = 0;
+bool izbor=0;
+
+void setup(){
+  Serial.begin(115200);
+  delay(700);
+
+}
+
+void loop(){
+  // Wait for computer to send character
+  // Once character received, start sending data to computer
+  //if (Serial.available() > 0){
+  //uint8_t  incomingChar = Serial.read();
+      Serial.println(izbor);
+
+    while(!Serial.available()){}
+    // Send data to computer via Serial
+    for (int i = 0; i < 20; i++){
+      //Serial.print(counter);
+      //Serial.print(",");
+      Serial.println(counter + 1);
+      counter++;
+      if(counter==5)Serial.println("stop");
+      delay(500);
+    } 
+  
+  // Once data send is finished, send 'stop' to complete
+  //Serial.println("stop");
+  //Serial.flush();
+  //}
+  
+}
