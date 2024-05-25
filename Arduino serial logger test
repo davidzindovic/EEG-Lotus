@@ -5,11 +5,21 @@
 *This example uses interger variable, other data types are possible
 */
 uint8_t counter = 0;
-bool izbor=0;
+bool izbor_za_log;
+bool odpiranje_roze;
+bool demonstracija;
 
 void setup(){
+  pinMode(10,INPUT_PULLUP);
+  pinMode(11,INPUT_PULLUP);
+  pinMode(12,INPUT_PULLUP);
+
   Serial.begin(115200);
   delay(700);
+
+  izbor_za_log=digitalRead(12);
+  odpiranje_roze=digitalRead(11);
+  demonstracija=digitalRead(10);
 
 }
 
@@ -18,7 +28,8 @@ void loop(){
   // Once character received, start sending data to computer
   //if (Serial.available() > 0){
   //uint8_t  incomingChar = Serial.read();
-      Serial.println(izbor);
+    Serial.println(izbor_za_log);
+    Serial.println(odpiranje_roze);
 
     while(!Serial.available()){}
     // Send data to computer via Serial
@@ -30,7 +41,7 @@ void loop(){
       if(counter==5)Serial.println("stop");
       delay(500);
     } 
-  
+
   // Once data send is finished, send 'stop' to complete
   //Serial.println("stop");
   //Serial.flush();
