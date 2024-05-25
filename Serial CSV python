@@ -4,7 +4,7 @@ import csv
 import os, os.path
 from datetime import datetime
 import time
-#import serial
+#from serial import Serial
 import serial.tools.list_ports
  
 laufa=1 
@@ -35,8 +35,20 @@ for x in range(0,len(portsList)):
 serialInst.baudrate = 115200
 serialInst.port = portVar
 serialInst.open()
-paket=2
+#paket=2
+
+packet = serialInst.readline()
+paket=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
+if(int(paket)==0):
+	print("\nLogganje onemogočeno.")
+	paket=0
+elif(int(paket)==1):
+	print("\nLogganje omogočeno.")
+	paket=2
+
 while int(paket)>1:
+
+
     packet = serialInst.readline()
     paket=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
     if(int(paket)==0):
@@ -80,7 +92,7 @@ elif(stanje==1):
 #main del:
 
 if(laufa):
-    print("!!!!!")
+    print("\nzacetek meritve\n---------------------------------------")
     with open(filename, 'w',newline='') as csvfile:
         # creating a csv dict writer object
         writer = csv.DictWriter(csvfile, fieldnames=stolpci)
@@ -101,7 +113,7 @@ if(laufa):
                     break           
         # Close port and CSV file to exit
     serialInst.close()
-print("konec branja")
+print("-------------------------------------\nkonec branja")
     # writing data rows
     #for i in range(10):
     #    writer.writerow({'cas1':i,'vrednost1':i+1})
