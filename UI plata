@@ -1,0 +1,40 @@
+#define START_GUMB 5
+#define ROZA_STIKALO 6
+#define CSVLOG_STIKALO 7
+#define DEMO_STIKALO 9
+#define START_LED 10
+#define ROZA_LED 11
+#define CSVLOG_LED A1
+#define DEMO_LED A0
+
+bool start_gumb=0;
+bool roza_stikalo;
+bool csvlog_stikalo;
+bool demo_stikalo;
+uint32_t millis_prej=0;
+
+void setup() {
+  // put your setup code here, to run once:
+  pinMode(START_GUMB,INPUT_PULLUP);
+  pinMode(ROZA_STIKALO,INPUT_PULLUP);
+  pinMode(CSVLOG_STIKALO,INPUT_PULLUP);
+  pinMode(DEMO_STIKALO,INPUT_PULLUP);
+  pinMode(START_LED,OUTPUT);
+  pinMode(ROZA_LED,OUTPUT);
+  pinMode(CSVLOG_LED,OUTPUT);
+  pinMode(DEMO_LED,OUTPUT);
+  //Serial.begin(9600);
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+if(!digitalRead(START_GUMB)&&((millis()-millis_prej)>1000)){start_gumb=!start_gumb;millis_prej=millis();}
+roza_stikalo=digitalRead(ROZA_STIKALO);
+csvlog_stikalo=digitalRead(CSVLOG_STIKALO);
+demo_stikalo=digitalRead(DEMO_STIKALO);
+digitalWrite(START_LED,start_gumb);
+digitalWrite(ROZA_LED,roza_stikalo);
+digitalWrite(CSVLOG_LED,csvlog_stikalo);
+digitalWrite(DEMO_LED,demo_stikalo);
+delay(50);
+}
