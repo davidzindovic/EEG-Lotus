@@ -7,6 +7,9 @@
 #define CSVLOG_LED A1
 #define DEMO_LED A0
 
+//#define PIR_SENSOR 13
+//#define HALL_SENSOR A1
+
 bool start_gumb=0;
 bool roza_stikalo;
 bool csvlog_stikalo;
@@ -23,11 +26,36 @@ void setup() {
   pinMode(ROZA_LED,OUTPUT);
   pinMode(CSVLOG_LED,OUTPUT);
   pinMode(DEMO_LED,OUTPUT);
-  //Serial.begin(9600);
+  Serial.begin(9600);
+  Serial.print(ui_config());
+  
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+
+//ui_config();
+//while(!hall_senozor) //če nekdo vzame ploščico ven omogoči ui config da spremeni nastavitve
+//  while(!pir_senzor)
+//    {koda}
+//  while(pir_senzor){} // če kdo poseže notri z roko se mašina ustavi, če da roko ven nadaljuje
+
+//paše v {koda}:
+
+static uint8_t nastavitve=ui_config();
+if(nastavitve & 0b100) {koda za demo} //demo ima najvišjo prioriteto
+else if((nastavitve&0b010)&&(nastavitve&0b001))funkcija_za_merjenje_in_odpiranje(1,1);
+else if((!nastavitve&0b010)&&(nastavitve&0b001))funkcija_za_merjenje_in_odpiranje(0,1);
+else if((nastavitve&0b010)&&(!nastavitve&0b001))funkcija_za_merjenje_in_odpiranje(1,0);
+else if((!nastavitve&0b010)&&(!nastavitve&0b001))funkcija_za_merjenje_in_odpiranje(0,0);
+
+}
+
+void funkcija_za_merjenje_in_odpiranje(bool meritve, bool odpiranje)
+{}
+
+uint8_t ui_config(void)
+{
+while(!start_gumb){
 if(!digitalRead(START_GUMB)&&((millis()-millis_prej)>1000)){start_gumb=!start_gumb;millis_prej=millis();}
 roza_stikalo=digitalRead(ROZA_STIKALO);
 csvlog_stikalo=digitalRead(CSVLOG_STIKALO);
@@ -36,5 +64,6 @@ digitalWrite(START_LED,start_gumb);
 digitalWrite(ROZA_LED,roza_stikalo);
 digitalWrite(CSVLOG_LED,csvlog_stikalo);
 digitalWrite(DEMO_LED,demo_stikalo);
-delay(50);
+}
+return (demo_stikalo<<2 | csvlog_stikalo<<1 | roza_stikalo<<0);
 }
