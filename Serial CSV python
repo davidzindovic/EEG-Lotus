@@ -11,8 +11,8 @@ laufa=1
  
  
 # field cas2s
-stolpci_poskus_1 = ['cas1', 'vrednost1']
-stolpci_poskus_2 = ['cas2', 'vrednost2']
+stolpci_poskus_1 = ['aktivna_vrednost1','izpis_povprecja1', 'povprecje1']
+stolpci_poskus_2 = ['aktivna_vrednost2','izpis_povprecja1', 'povprecje2']
 
 stevilka_poskusa=len([name for name in os.listdir('.') if os.path.isfile(name)])
 
@@ -32,11 +32,12 @@ for x in range(0,len(portsList)):
         portVar = "COM" + str(val)
         print(portVar)
 
-serialInst.baudrate = 115200
+serialInst.baudrate = 57600
 serialInst.port = portVar
 serialInst.open()
 #paket=2
 
+# manipulacija izpisa glede na prejet izbor arduinota:
 packet = serialInst.readline()
 paket=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
 if(int(paket)==0):
@@ -55,7 +56,9 @@ while int(paket)>1:
         print("\nMerjenje sproščenosti ob mirovanju")
     elif(int(paket)==1):
         print("\nMerjenje sproščenosti ob EEG roži")
-        
+
+#konec manipulacije
+
 #print(stevilka_poskusa)
 if(stevilka_poskusa%2!=0):
     stevilka_poskusa=(stevilka_poskusa+1)/2
@@ -105,9 +108,20 @@ if(laufa):
         while laufa:
             if serialInst.in_waiting:
                 packet = serialInst.readline()
-                paket=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
+                trenutna_meritev=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
+                print("Trenutna meritev: "+trenutna_meritev)
+                packet = serialInst.readline()
+                ali_je_povprecje=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
+                if(ali_je_povprecje):
+                    zapis_povprecja="Povprečje zadnjih 30 meritev: "
+                    print(zapis_povprecja)
+                else:
+                    zapis_povprecja="Aktivno povprečje: "
+                    print(zapis_povprecja)
+                packet = serialInst.readline()
+                povprecje=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
                 print(paket)
-                writer.writerow({stolpci[0]:time.time()-start,stolpci[1]:paket})
+                writer.writerow({stolpci[0]:trenutna_meritev,stolpci[1]:zapis_povprecja,stolpci[2]:povprecje})
                 if (paket == "stop"):
                     laufa=0
                     break           
