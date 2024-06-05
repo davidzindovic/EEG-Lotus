@@ -1,3 +1,9 @@
+#include <Mindwave.h>
+
+#define PIN_STEP_ENABLE 2
+#define PIN_STEP1_DIRECTION 3
+#define PIN_STEP1_STEP 4
+
 #define START_GUMB 5
 #define ROZA_STIKALO 6
 #define CSVLOG_STIKALO 7
@@ -19,6 +25,10 @@
 
 #define HALL_SENSOR_WIGGLE_ROOM 5
 
+Mindwave mindwave;
+
+uint8_t meritve[ST_POVPRECIJ];
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(START_GUMB,INPUT_PULLUP);
@@ -29,7 +39,8 @@ void setup() {
   pinMode(ROZA_LED,OUTPUT);
   pinMode(CSVLOG_LED,OUTPUT);
   pinMode(DEMO_LED,OUTPUT);
-  Serial.begin(BAUDRATE);
+  mindwave.setupe();
+  //Serial.begin(BAUDRATE);
 
   //home-anje roze:
   while(!digitalRead(END_SWITCH))vrtenje(HITROST_MOTORJA,0,100);
@@ -39,19 +50,20 @@ void loop() {
 static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //hall senzor nastavi mirovno vrednost
 static uint8_t nastavitve=ui_config();                    // nastavitve določimo in potrdimo z UI ploščo
 //po stabilizaciji hall senzorja odkomentiraj:
-/*
+
 while(analogRead(HALL_SENSOR)<(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)){} //dokler je UI plošča odmaknjena naprava čaka
 delay(10000); // po potrditvi konfiguracije in odložitvi ploščice ima uporabnik 10 sekund da umakne roko
 
-while((analogRead(HALL_SENSOR)<(HALL_SENSOR_AVRG+HALL_SENSOR_WIGGLE_ROOM)) || (analogRead(HALL_SENSOR)>(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM))){mindwave.update(Serial, onMindwaveData(nastavitve&0b100,nastavitve&0b010,nastavitve&0b001));}
-*/
+while((analogRead(HALL_SENSOR)<(HALL_SENSOR_AVRG+HALL_SENSOR_WIGGLE_ROOM)) || (analogRead(HALL_SENSOR)>(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM))){mindwave.updatee(); ObdelavaPodatkov(nastavitve&0b100,nastavitve&0b010,nastavitve&0b001);}
+if(nastavitve&0b010)Serial.println("stop"); // če smo merili pošjemo stop da python neha beležiti podatke
+for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
 //dokler ni hall senzor še stabilen:
-mindwave.update(Serial, onMindwaveData(nastavitve&0b100,nastavitve&0b010,nastavitve&0b001));
+//mindwave.update(Serial, onMindwaveData(nastavitve&0b100,nastavitve&0b010,nastavitve&0b001));
 
 }
 //-------------------------------------------------------------------------------------------------
 // funkcija za mindwave mobile in preostanek:
-void onMindwaveData(bool demo,bool meritve, bool odpiranje) {
+void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   //demo mode spremenljivki:
   static bool demo_flag=0; //če sem prišel do zgornje ali spodnje meje
   static bool smer=0;      // da lahko spreminjam smer vrtejna v demo mode
@@ -59,19 +71,29 @@ void onMindwaveData(bool demo,bool meritve, bool odpiranje) {
   //spremenljivki za povprecje:
   static bool elementi_povprecja=0; //ce jih je vec kot 30
   uint16_t povprecje=0;
-  static uint8_t meritve[ST_POVPRECIJ]={0};
+ // static uint8_t meritve[ST_POVPRECIJ];
+  static bool nastavitev_meritev=1;
   static uint8_t stevec_meritev=0;
+  static uint8_t meditacija;
+
+  //prvic po inicializaciji arraya meritve ga zafilamo z ničlami:
+  /*if(nastavitev_meritev)
+  {
+    for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
+    nastavitev_meritev=!nastavitev_meritev;
+  }*/
   
   // demo mode:
   //if(demo){demo_flag=vrtenje(HITROST_MOTORJA,1,KORAKI-MOTORJA);if(demo_flag)smer!=smer;}  
-  if(demo){}
-  else if(meritve||odpiranje)
+  if(demo){vrtenje(HITROST_MOTORJA,1,100);}
+  else if(ali_merim||odpiranje)
   {
   //dejanska meritev:
-  meditacija = mindwave.meditation();
+  meditacija = mindwave.getMeditation();
     
   //za izpis na zaslonu računalnika:
-  if(meritve){
+  if(ali_merim){
+  while(!Serial.available()){}
   Serial.println(meditacija);
   Serial.println(meritve[ST_POVPRECIJ]!=0); //s tem ve če PC izpise "aktivno povprečje" ali "povprečje zadnjih 30 meritev"
   //izracun povprecja:
@@ -81,9 +103,8 @@ void onMindwaveData(bool demo,bool meritve, bool odpiranje) {
   for(int a=0;a<ST_POVPRECIJ;a++)
   {
     if(meritve[a]!=0)povprecje+=meritve[a];
-    else break;
+    else {povprecje/=a; break;}
   }
-  povprecje/=a;
   Serial.println(povprecje);
   }
   //regulacija ne naredi ničesar če je odpiranje=0
@@ -94,6 +115,8 @@ void onMindwaveData(bool demo,bool meritve, bool odpiranje) {
 //funkcija za vrtenje motorja:
 bool vrtenje(int hitrost, bool smer, int stevilo_korakov)
 {
+static int stepsPerSecond;
+static int pozicija=0;
 
 // spremenljivka in predznak hitrosti določata če se spremenljivka pozicija povečuje ali zmanjšuje
 if(smer) stepsPerSecond = hitrost;
@@ -143,12 +166,12 @@ uint8_t ui_config(void)
 static bool roza_stikalo;
 static bool csvlog_stikalo;
 static bool demo_stikalo;
-static bool start_gumb;
+static bool start_gumb=0;
 static uint32_t millis_prej=0;
 
-while(!start_gumb&&((millis()-millis_prej)>1000))
+while(!start_gumb)
 {
-start_gumb=digitalRead(START_GUMB);
+if((millis()-millis_prej)>1000)start_gumb=!(digitalRead(START_GUMB));
 roza_stikalo=digitalRead(ROZA_STIKALO);
 csvlog_stikalo=digitalRead(CSVLOG_STIKALO);
 demo_stikalo=digitalRead(DEMO_STIKALO);
@@ -157,6 +180,7 @@ digitalWrite(ROZA_LED,roza_stikalo);
 digitalWrite(CSVLOG_LED,csvlog_stikalo);
 digitalWrite(DEMO_LED,demo_stikalo);
 }
+start_gumb=0;
 millis_prej=millis();
 Serial.println((csvlog_stikalo<<1)&(0b010));
 Serial.println((roza_stikalo<<0)&(0b001));
