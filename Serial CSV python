@@ -47,6 +47,10 @@ elif(int(paket)==1):
 	print("\nLogganje omogočeno.")
 	paket=2
 
+if(paket==0):
+    print("Zapiram program...")
+    time.sleep(3)
+
 while int(paket)>1:
 
 
@@ -57,78 +61,78 @@ while int(paket)>1:
     elif(int(paket)==1):
         print("\nMerjenje sproščenosti ob EEG roži")
 
-#konec manipulacije
+    #konec manipulacije
 
-#print(stevilka_poskusa)
-if(stevilka_poskusa%2!=0):
-    stevilka_poskusa=(stevilka_poskusa+1)/2
-elif(stevilka_poskusa%2==0):
-    stevilka_poskusa/=2
-#print(str(int(stevilka_poskusa))+"\n")
-#"C:/Users/David Zindović/Desktop/Projekti/FE LMK/EEG Lotus/py/" + 
+    #print(stevilka_poskusa)
+    if(stevilka_poskusa%2!=0):
+        stevilka_poskusa=(stevilka_poskusa+1)/2
+    elif(stevilka_poskusa%2==0):
+        stevilka_poskusa/=2
+    #print(str(int(stevilka_poskusa))+"\n")
+    #"C:/Users/David Zindović/Desktop/Projekti/FE LMK/EEG Lotus/py/" + 
 
-# preverim ce ime datoteke (kere koli od obeh variant) obstaja:
-path1 = "Poskus "+str(int(stevilka_poskusa))+" prvi del ("+datetime.today().strftime('%d-%m-%Y')+").csv"
-path2 = "Poskus "+str(int(stevilka_poskusa))+" drugi del ("+datetime.today().strftime('%d-%m-%Y')+").csv"
-isdir1 = os.path.isfile(path1) #pogleda ce navedena datoteka obstaja
-isdir2 = os.path.isfile(path2)
-#print(path1+" | "+path2)
-#print("a obstaja?\n"+str(isdir1)+" | "+str(isdir2)+"\n")
+    # preverim ce ime datoteke (kere koli od obeh variant) obstaja:
+    path1 = "Poskus "+str(int(stevilka_poskusa))+" prvi del ("+datetime.today().strftime('%d-%m-%Y')+").csv"
+    path2 = "Poskus "+str(int(stevilka_poskusa))+" drugi del ("+datetime.today().strftime('%d-%m-%Y')+").csv"
+    isdir1 = os.path.isfile(path1) #pogleda ce navedena datoteka obstaja
+    isdir2 = os.path.isfile(path2)
+    #print(path1+" | "+path2)
+    #print("a obstaja?\n"+str(isdir1)+" | "+str(isdir2)+"\n")
 
-# pogledam stanje, ki ga je arduino prebral na stikalu in dolocim ime
-stanje=int(paket)
-if(stanje==0):
-    filename = "Poskus "+str(int(stevilka_poskusa))+" prvi del ("+    datetime.today().strftime('%d-%m-%Y')+").csv"
-    if(((filename==path1) and isdir1) or ((filename==path2) and isdir2)):
-        laufa=0
-        print("\nDatoteka obstaja!!!\n")
-    stolpci=stolpci_poskus_1
-elif(stanje==1):
-    filename = "Poskus "+str(int(stevilka_poskusa))+" drugi del ("+    datetime.today().strftime('%d-%m-%Y')+").csv"
-    if(((filename==path1) and isdir1) or ((filename==path2) and isdir2)):
-        laufa=0
-        print("\nDatoteka obstaja!!!\n")
-    stolpci=stolpci_poskus_2
+    # pogledam stanje, ki ga je arduino prebral na stikalu in dolocim ime
+    stanje=int(paket)
+    if(stanje==0):
+        filename = "Poskus "+str(int(stevilka_poskusa))+" prvi del ("+    datetime.today().strftime('%d-%m-%Y')+").csv"
+        if(((filename==path1) and isdir1) or ((filename==path2) and isdir2)):
+            laufa=0
+            print("\nDatoteka obstaja!!!\n")
+        stolpci=stolpci_poskus_1
+    elif(stanje==1):
+        filename = "Poskus "+str(int(stevilka_poskusa))+" drugi del ("+    datetime.today().strftime('%d-%m-%Y')+").csv"
+        if(((filename==path1) and isdir1) or ((filename==path2) and isdir2)):
+            laufa=0
+            print("\nDatoteka obstaja!!!\n")
+        stolpci=stolpci_poskus_2
 
 
 
-#main del:
+    #main del:
 
-if(laufa):
-    print("\nzacetek meritve\n---------------------------------------")
-    with open(filename, 'w',newline='') as csvfile:
-        # creating a csv dict writer object
-        writer = csv.DictWriter(csvfile, fieldnames=stolpci)
-     
-        # writing headers (field names)
-        writer.writeheader()
-        laufa=1
-        start=time.time()
-        serialInst.write("x".encode()) #poslje kr neki da on nadaljuje z mainom
-        while laufa:
-            if serialInst.in_waiting:
-                packet = serialInst.readline()
-                trenutna_meritev=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
-                print("Trenutna meritev: "+trenutna_meritev)
-                packet = serialInst.readline()
-                ali_je_povprecje=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
-                if(ali_je_povprecje):
-                    zapis_povprecja="Povprečje zadnjih 30 meritev: "
-                    print(zapis_povprecja)
-                else:
-                    zapis_povprecja="Aktivno povprečje: "
-                    print(zapis_povprecja)
-                packet = serialInst.readline()
-                povprecje=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
-                print(paket)
-                writer.writerow({stolpci[0]:trenutna_meritev,stolpci[1]:zapis_povprecja,stolpci[2]:povprecje})
-                if (paket == "stop"):
-                    laufa=0
-                    break           
-        # Close port and CSV file to exit
-    serialInst.close()
-print("-------------------------------------\nkonec branja")
-    # writing data rows
-    #for i in range(10):
-    #    writer.writerow({'cas1':i,'vrednost1':i+1})
-        #writer.writerow({'vrednost1':i+1})
+    if(laufa):
+        print("\nzacetek meritve\n---------------------------------------")
+        with open(filename, 'w',newline='') as csvfile:
+            # creating a csv dict writer object
+            writer = csv.DictWriter(csvfile, fieldnames=stolpci)
+         
+            # writing headers (field names)
+            writer.writeheader()
+            laufa=1
+            start=time.time()
+            serialInst.write("x".encode()) #poslje kr neki da on nadaljuje z mainom
+            while laufa:
+                if serialInst.in_waiting:
+                    packet = serialInst.readline()
+                    trenutna_meritev=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
+                    print("Trenutna meritev: "+trenutna_meritev)
+                    packet = serialInst.readline()
+                    ali_je_povprecje=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
+                    if(ali_je_povprecje):
+                        zapis_povprecja="Povprečje zadnjih 30 meritev: "
+                        print(zapis_povprecja)
+                    else:
+                        zapis_povprecja="Aktivno povprečje: "
+                        print(zapis_povprecja)
+                    packet = serialInst.readline()
+                    povprecje=packet[0:len(packet)-2].decode("utf-8").rstrip('\r').rstrip('\n')
+                    print(paket)
+                    writer.writerow({stolpci[0]:trenutna_meritev,stolpci[1]:zapis_povprecja,stolpci[2]:povprecje})
+                    if (paket == "stop"):
+                        laufa=0
+                        break           
+            # Close port and CSV file to exit
+        serialInst.close()
+    print("-------------------------------------\nkonec branja")
+        # writing data rows
+        #for i in range(10):
+        #    writer.writerow({'cas1':i,'vrednost1':i+1})
+            #writer.writerow({'vrednost1':i+1})
