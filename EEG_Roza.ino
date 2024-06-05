@@ -172,9 +172,9 @@ static uint32_t millis_prej=0;
 while(!start_gumb)
 {
 if((millis()-millis_prej)>1000)start_gumb=!(digitalRead(START_GUMB));
-roza_stikalo=digitalRead(ROZA_STIKALO);
-csvlog_stikalo=digitalRead(CSVLOG_STIKALO);
-demo_stikalo=digitalRead(DEMO_STIKALO);
+roza_stikalo=!digitalRead(ROZA_STIKALO);
+csvlog_stikalo=!digitalRead(CSVLOG_STIKALO);
+demo_stikalo=!digitalRead(DEMO_STIKALO);
 digitalWrite(START_LED,start_gumb);
 digitalWrite(ROZA_LED,roza_stikalo);
 digitalWrite(CSVLOG_LED,csvlog_stikalo);
