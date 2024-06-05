@@ -1,0 +1,30 @@
+#define HALL_SENSOR A0
+#define BAUDRATE 57600
+#define HALL_SENSOR_WIGGLE_ROOM 2
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(BAUDRATE);
+    pinMode(HALL_SENSOR,INPUT);
+    pinMode(10,OUTPUT);
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //hall senzor nastavi mirovno vrednost
+
+
+while((analogRead(HALL_SENSOR)<(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)))
+{Serial.print(analogRead(HALL_SENSOR));
+Serial.print("   ");
+Serial.print(1);
+Serial.print("   ");
+Serial.println(HALL_SENSOR_AVRG);
+digitalWrite(10,1);}
+//dokler je UI plošča odmaknjena naprava čaka
+digitalWrite(10,0);
+Serial.print(analogRead(HALL_SENSOR));
+Serial.print("   ");
+Serial.print(0);
+Serial.print("   ");
+Serial.println(HALL_SENSOR_AVRG);
+}
