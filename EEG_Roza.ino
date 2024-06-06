@@ -1,6 +1,7 @@
 //popravi loop, hall pa mindwave zadeve lp
 
-#include <Mindwave.h>
+
+//#include <Mindwave.h>
 #include <SoftwareSerial.h>
 
 #define PIN_STEP_ENABLE 2
@@ -27,14 +28,15 @@
 #define SAFETY_CAKANJE 2000 //čas po odložitvi v ms
 
 //za ne debugiranje moraš zakomentirati spodnjo vrstico
-#define DEBUG 1
+#define DEBUG 0
 
 SoftwareSerial bluetooth(A2,8);
-Mindwave mindwave;
+//Mindwave mindwave;
 
 const byte ST_POVPRECIJ=30;
 uint16_t meritve[ST_POVPRECIJ];
-int umirjenost;
+byte umirjenost=0;
+byte *kazalec=&umirjenost;
 byte nastavitve;
 //uint16_t povprecje=0;
 
@@ -46,6 +48,21 @@ byte mask_demo=0b100;
 byte mask_log=0b010;
 byte mask_roza=0b001;
 */
+
+// checksum variables
+byte generatedChecksum = 0;
+byte checksum = 0; 
+int payloadLength = 0;
+byte payloadData[64] = {
+  0};
+byte poorQuality = 0;
+//byte attention = 0;
+byte meditation = 0;
+
+// system variables
+long lastReceivedPacket = 0;
+boolean bigPacket = false;
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(PIN_STEP_ENABLE,OUTPUT);
@@ -73,8 +90,6 @@ void setup() {
 
 void loop() {
 
-
-
 static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //hall senzor nastavi mirovno vrednost
 static uint16_t HALL_SENSOR_WIGGLE_ROOM=70;
 static bool first_nastavitve=1;
@@ -86,10 +101,10 @@ while(analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)){Seria
 delay(SAFETY_CAKANJE); // po potrditvi konfiguracije in odložitvi ploščice ima uporabnik 10 sekund da umakne roko
 
 while((analogRead(HALL_SENSOR)>=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)) ){
-Serial.println("GARBAM  ");
-Serial.print((nastavitve&mask_demo)==4);
-Serial.print((nastavitve&mask_log)==2);Serial.println((nastavitve&mask_roza)==1); 
-//ObdelavaPodatkov(nastavitve&mask_demo,nastavitve&mask_log,nastavitve&mask_roza);}
+Serial.println("GARBAM  ");//Serial.println(bluetooth.available());
+//Serial.print((nastavitve&mask_demo)==4);
+//Serial.print((nastavitve&mask_log)==2);Serial.println((nastavitve&mask_roza)==1); 
+
 ObdelavaPodatkov((nastavitve&mask_demo)==4,(nastavitve&mask_log)==2,(nastavitve&mask_roza)==1);
 }
 Serial.println("NE GARBAM");
@@ -98,16 +113,106 @@ for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
 nastavitve=ui_config();
 
 }
-//-------------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 // funkcija za mindwave mobile in preostanek:
-void onMindwaveData()
+int onMindwaveData()
 {
-Serial.print("umirjenost loop: ");
-umirjenost=mindwave.meditation();
-Serial.println(umirjenost);
-
+//Serial.print("umirjenost loop: ");
+//umirjenost=mindwave.meditation();
+//Serial.println(umirjenost);
+//Serial.println("bruh");
+//*kazalec=mindwave.meditation();
 }
 //---------------------------------------------------------------------------------------------
+byte ReadOneByte() {
+  int ByteRead;
+
+  while(!bluetooth.available());
+  ByteRead = bluetooth.read();
+
+#if DEBUG 
+  Serial.println(ByteRead);   // echo the same byte out the USB serial (for debug purposes)
+#endif
+
+  return ByteRead;
+}
+void EEG()
+{
+  
+
+  // Look for sync bytes
+  if(ReadOneByte() == 170) {
+    if(ReadOneByte() == 170) {
+
+      payloadLength = ReadOneByte();
+      if(payloadLength > 169)                      //Payload length can not be greater than 169
+          return;
+
+      generatedChecksum = 0;        
+      for(int i = 0; i < payloadLength; i++) {  
+        payloadData[i] = ReadOneByte();            //Read payload into memory
+        generatedChecksum += payloadData[i];
+      }   
+
+      checksum = ReadOneByte();                      //Read checksum byte from stream      
+      generatedChecksum = 255 - generatedChecksum;   //Take one's compliment of generated checksum
+
+        if(checksum == generatedChecksum) {    
+
+        poorQuality = 200;
+       // attention = 0;
+        //meditation = 0;
+        *kazalec=0;
+        for(int i = 0; i < payloadLength; i++) {    // Parse the payload
+          switch (payloadData[i]) {
+          case 2:
+            i++;            
+            poorQuality = payloadData[i];
+            bigPacket = true;            
+            break;
+          case 4:
+            i++;
+            //attention = payloadData[i];                        
+            break;
+          case 5:
+            i++;
+            *kazalec = payloadData[i];
+            break;
+          case 0x80:
+            i = i + 3;
+            break;
+          case 0x83:
+            i = i + 25;      
+            break;
+          default:
+            break;
+          } // switch
+        } // for loop
+
+#if DEBUG
+
+        // *** Add your code here ***
+
+        if(bigPacket) {
+          Serial.print("PoorQuality: ");
+          Serial.println(poorQuality, DEC);
+          Serial.print(" Med: ");
+          Serial.println(*kazalec, DEC);
+          //Serial.print(" Time since last packet: ");
+          //Serial.print(millis() - lastReceivedPacket, DEC);
+          //lastReceivedPacket = millis();
+          Serial.print("\n");
+                    
+        }
+#endif        
+        bigPacket = false;        
+      }
+      else {
+        // Checksum Error
+      }  // end if else for checksum
+    } // end if read 0xAA byte
+  } // end if read 0xAA byte
+}
 // funkcija za obdelavo podatkov:
 void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   //demo mode spremenljivki:
@@ -127,7 +232,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
     nastavitev_meritev=!nastavitev_meritev;
   }
 
-  #ifdef DEBUG
+  #if DEBUG
   Serial.print("Demo argument: ");Serial.println(demo);
   Serial.print("ali_merim argument: ");Serial.println(ali_merim);
   Serial.print("Odpiranje argument: ");Serial.println(odpiranje);
@@ -145,44 +250,51 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   //za izpis na zaslonu računalnika:
   if(ali_merim){
 
-  #ifdef DEBUG
+  #if DEBUG
   Serial.print("Umirjenost: ");
-  #endif
-  //mindwave.update(bluetooth,onMindwaveData);
   Serial.println(umirjenost);
+  #endif
 
-  #ifdef DEBUG
+
+  #if DEBUG
   Serial.print("Aktivno povprečje ali povprečje zadnjih 30 meritev? ");
+  Serial.println(meritve[ST_POVPRECIJ]!=0); //s tem ve če PC izpise "aktivno povprečje" ali "povprečje zadnjih 30 meritev"
   #endif
   
-  Serial.println(meritve[ST_POVPRECIJ]!=0); //s tem ve če PC izpise "aktivno povprečje" ali "povprečje zadnjih 30 meritev"
   
   //izracun povprecja:
   
   if(stevec_meritev==ST_POVPRECIJ){stevec_meritev=0;Serial.println("stevec_meritev reset");}
-  mindwave.update(bluetooth,onMindwaveData);
+  //mindwave.update(bluetooth,onMindwaveData);
+  //umirjenost=mindwave.meditation();
+  EEG();
+  //umirjenost=meditation;
+  #if DEBUG
+  Serial.print("Umirjenost2: ");
+  #endif
+  Serial.println(*kazalec);
   meritve[stevec_meritev]=umirjenost;
   stevec_meritev++;
   for(uint16_t a=0;a<ST_POVPRECIJ;a++)
   {uint16_t povprecje=0;
-    #ifdef DEBUG
+    #if DEBUG
     Serial.print("meritve[a] = ");
     Serial.println(meritve[a]);
     #endif
     if(meritve[a]!=0){povprecje+=meritve[a];}
     else {povprecje/=((a+1)*(a==0)+a*(a>0));
-          #ifdef DEBUG
+          #if DEBUG
           Serial.print("Povprečje: ");
-          #endif
           Serial.println(povprecje);
+          #endif
           break;}
     if(a==(ST_POVPRECIJ-1))
     {
       povprecje/=((a+1)*(a==0)+a*(a>0));
-      #ifdef DEBUG
+      #if DEBUG
       Serial.print("Povprečje: ");
-      #endif
       Serial.println(povprecje);
+      #endif
     }
   }
   }
