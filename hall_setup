@@ -1,6 +1,6 @@
 #define HALL_SENSOR A0
 #define BAUDRATE 57600
-#define HALL_SENSOR_WIGGLE_ROOM 2
+#define HALL_SENSOR_WIGGLE_ROOM 50
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(BAUDRATE);
@@ -13,15 +13,16 @@ void loop() {
 static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //hall senzor nastavi mirovno vrednost
 
 
-while((analogRead(HALL_SENSOR)<(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)))
+while((analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)))
 {Serial.print(analogRead(HALL_SENSOR));
 Serial.print("   ");
 Serial.print(1);
 Serial.print("   ");
 Serial.println(HALL_SENSOR_AVRG);
-digitalWrite(10,1);}
+//digitalWrite(10,1);
+}
 //dokler je UI plošča odmaknjena naprava čaka
-digitalWrite(10,0);
+//digitalWrite(10,0);
 Serial.print(analogRead(HALL_SENSOR));
 Serial.print("   ");
 Serial.print(0);
