@@ -26,14 +26,20 @@
 
 #define ST_POVPRECIJ 30
 
-#define HALL_SENSOR_WIGGLE_ROOM 2
+#define HALL_SENSOR_WIGGLE_ROOM 50
+
+#define SAFETY_CAKANJE 2000 //čas po odložitvi v ms
 
 SoftwareSerial bluetooth(A2,8);
 Mindwave mindwave;
 
 uint8_t meritve[ST_POVPRECIJ];
 uint8_t umirjenost;
-uint8_t nastavitve;
+byte nastavitve;
+
+byte mask_demo=0b100;
+byte mask_log=0b010;
+byte mask_roza=0b001;
 
 void setup() {
   // put your setup code here, to run once:
@@ -61,45 +67,42 @@ void setup() {
 }
 
 void loop() {
-  /*
+
 static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //hall senzor nastavi mirovno vrednost
-static uint8_t nastavitve=ui_config();                    // nastavitve določimo in potrdimo z UI ploščo
-//po stabilizaciji hall senzorja odkomentiraj:
+static bool first_nastavitve=1;
 
-while(analogRead(HALL_SENSOR)<(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)){} //dokler je UI plošča odmaknjena naprava čaka
-delay(10000); // po potrditvi konfiguracije in odložitvi ploščice ima uporabnik 10 sekund da umakne roko
+if(first_nastavitve){nastavitve=ui_config();first_nastavitve=!first_nastavitve;}
+/*
+static byte mask_demo=0b100;
+static byte mask_log=0b010;
+static byte mask_roza=0b001;
+*/
+while(analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)){Serial.println("CAKAM DA ODLOZIS");} //dokler je UI plošča odmaknjena naprava čaka
+Serial.print("ODLOZIL   nastavitve:");
+Serial.print((nastavitve&mask_demo)==4);
+Serial.print((nastavitve&mask_log)==2);Serial.println((nastavitve&mask_roza)==1);
+delay(SAFETY_CAKANJE); // po potrditvi konfiguracije in odložitvi ploščice ima uporabnik 10 sekund da umakne roko
 
-while((analogRead(HALL_SENSOR)<(HALL_SENSOR_AVRG+HALL_SENSOR_WIGGLE_ROOM)) || (analogRead(HALL_SENSOR)>(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM))){ ObdelavaPodatkov(nastavitve&0b100,nastavitve&0b010,nastavitve&0b001);}
+while((analogRead(HALL_SENSOR)>=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)) ){
+Serial.println("GARBAM  ");
+Serial.print((nastavitve&mask_demo)==4);
+Serial.print((nastavitve&mask_log)==2);Serial.println((nastavitve&mask_roza)==1);
+//ObdelavaPodatkov(nastavitve&mask_demo,nastavitve&mask_log,nastavitve&mask_roza);}
+ObdelavaPodatkov((nastavitve&mask_demo)==4,(nastavitve&mask_log)==2,(nastavitve&mask_roza)==1);}
+Serial.println("NE GARBAM");
 if(nastavitve&0b010)Serial.println("stop"); // če smo merili pošjemo stop da python neha beležiti podatke
 for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
-*/
-
-
-//dokler ni hall senzor še stabilen:
-//mindwave.update(Serial, onMindwaveData(nastavitve&0b100,nastavitve&0b010,nastavitve&0b001));
 nastavitve=ui_config();
-mindwave.update(bluetooth, onMindwaveData);
+
 }
 //-------------------------------------------------------------------------------------------------
 // funkcija za mindwave mobile in preostanek:
 void onMindwaveData()
 {
 umirjenost=mindwave.meditation();
-static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //hall senzor nastavi mirovno vrednost
-static uint8_t nastavitve=ui_config();                    // nastavitve določimo in potrdimo z UI ploščo
-//po stabilizaciji hall senzorja odkomentiraj:
-
-while(analogRead(HALL_SENSOR)<(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)){} //dokler je UI plošča odmaknjena naprava čaka
-delay(10000); // po potrditvi konfiguracije in odložitvi ploščice ima uporabnik 10 sekund da umakne roko
-
-while((analogRead(HALL_SENSOR)<(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)) ){ ObdelavaPodatkov(nastavitve&0b100,nastavitve&0b010,nastavitve&0b001);}
-
-ObdelavaPodatkov(nastavitve&0b100,nastavitve&0b010,nastavitve&0b001);
-
-if(nastavitve&0b010)Serial.println("stop"); // če smo merili pošjemo stop da python neha beležiti podatke
-//for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
 }
-
+//---------------------------------------------------------------------------------------------
+// funkcija za obdelavo podatkov:
 void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   //demo mode spremenljivki:
   static bool demo_flag=0; //če sem prišel do zgornje ali spodnje meje
@@ -125,12 +128,10 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   if(demo){/*vrtenje(HITROST_MOTORJA,1,100);*/}
   else if(ali_merim||odpiranje)
   {
-  //dejanska meritev:
-  //meditacija = mindwave.getMeditation();
-  //mindwave.update(bluetooth, onMindwaveData);
     
   //za izpis na zaslonu računalnika:
   if(ali_merim){
+  mindwave.update(bluetooth, onMindwaveData);
   //while(!Serial.available()){}
   Serial.println(umirjenost);
   Serial.println(meritve[ST_POVPRECIJ]!=0); //s tem ve če PC izpise "aktivno povprečje" ali "povprečje zadnjih 30 meritev"
@@ -150,6 +151,13 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   }
 }
 //-------------------------------------------------------------------------------------------------------
+//funkcija za regulacijo:
+void regulacija(uint8_t vrednost,bool mode)
+{
+  
+}
+
+//----------------------------------------------------------------------------------------------------------
 //funkcija za vrtenje motorja:
 bool vrtenje(int hitrost, bool smer, int stevilo_korakov)
 {
