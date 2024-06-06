@@ -24,23 +24,28 @@
 
 #define BAUDRATE 57600
 
-#define ST_POVPRECIJ 30
-
-#define HALL_SENSOR_WIGGLE_ROOM 50
-
 #define SAFETY_CAKANJE 2000 //čas po odložitvi v ms
+
+//za ne debugiranje moraš zakomentirati spodnjo vrstico
+#define DEBUG 1
 
 SoftwareSerial bluetooth(A2,8);
 Mindwave mindwave;
 
-uint8_t meritve[ST_POVPRECIJ];
-uint8_t umirjenost;
+const byte ST_POVPRECIJ=30;
+uint16_t meritve[ST_POVPRECIJ];
+int umirjenost;
 byte nastavitve;
+//uint16_t povprecje=0;
 
+byte mask_demo=4;
+byte mask_log=2;
+byte mask_roza=1;
+/*
 byte mask_demo=0b100;
 byte mask_log=0b010;
 byte mask_roza=0b001;
-
+*/
 void setup() {
   // put your setup code here, to run once:
   pinMode(PIN_STEP_ENABLE,OUTPUT);
@@ -68,29 +73,27 @@ void setup() {
 
 void loop() {
 
+
+
 static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //hall senzor nastavi mirovno vrednost
+static uint16_t HALL_SENSOR_WIGGLE_ROOM=70;
 static bool first_nastavitve=1;
 
 if(first_nastavitve){nastavitve=ui_config();first_nastavitve=!first_nastavitve;}
-/*
-static byte mask_demo=0b100;
-static byte mask_log=0b010;
-static byte mask_roza=0b001;
-*/
+
 while(analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)){Serial.println("CAKAM DA ODLOZIS");} //dokler je UI plošča odmaknjena naprava čaka
-Serial.print("ODLOZIL   nastavitve:");
-Serial.print((nastavitve&mask_demo)==4);
-Serial.print((nastavitve&mask_log)==2);Serial.println((nastavitve&mask_roza)==1);
+
 delay(SAFETY_CAKANJE); // po potrditvi konfiguracije in odložitvi ploščice ima uporabnik 10 sekund da umakne roko
 
 while((analogRead(HALL_SENSOR)>=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)) ){
 Serial.println("GARBAM  ");
 Serial.print((nastavitve&mask_demo)==4);
-Serial.print((nastavitve&mask_log)==2);Serial.println((nastavitve&mask_roza)==1);
+Serial.print((nastavitve&mask_log)==2);Serial.println((nastavitve&mask_roza)==1); 
 //ObdelavaPodatkov(nastavitve&mask_demo,nastavitve&mask_log,nastavitve&mask_roza);}
-ObdelavaPodatkov((nastavitve&mask_demo)==4,(nastavitve&mask_log)==2,(nastavitve&mask_roza)==1);}
+ObdelavaPodatkov((nastavitve&mask_demo)==4,(nastavitve&mask_log)==2,(nastavitve&mask_roza)==1);
+}
 Serial.println("NE GARBAM");
-if(nastavitve&0b010)Serial.println("stop"); // če smo merili pošjemo stop da python neha beležiti podatke
+if((nastavitve&mask_log)==2)Serial.println("stop"); // če smo merili pošjemo stop da python neha beležiti podatke
 for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
 nastavitve=ui_config();
 
@@ -99,7 +102,10 @@ nastavitve=ui_config();
 // funkcija za mindwave mobile in preostanek:
 void onMindwaveData()
 {
+Serial.print("umirjenost loop: ");
 umirjenost=mindwave.meditation();
+Serial.println(umirjenost);
+
 }
 //---------------------------------------------------------------------------------------------
 // funkcija za obdelavo podatkov:
@@ -107,44 +113,78 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   //demo mode spremenljivki:
   static bool demo_flag=0; //če sem prišel do zgornje ali spodnje meje
   static bool smer=0;      // da lahko spreminjam smer vrtejna v demo mode
+ 
+ // static uint8_t meritve[ST_POVPRECIJ];
+  static byte stevec_meritev=0;
+  static bool nastavitev_meritev=1;
 
   //spremenljivki za povprecje:
-  static bool elementi_povprecja=0; //ce jih je vec kot 30
-  uint16_t povprecje=0;
- // static uint8_t meritve[ST_POVPRECIJ];
-  static bool nastavitev_meritev=1;
-  static uint8_t stevec_meritev=0;
-  //static uint8_t meditacija;
 
   //prvic po inicializaciji arraya meritve ga zafilamo z ničlami:
   if(nastavitev_meritev)
   {
-    for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
+    for(byte a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
     nastavitev_meritev=!nastavitev_meritev;
   }
+
+  #ifdef DEBUG
+  Serial.print("Demo argument: ");Serial.println(demo);
+  Serial.print("ali_merim argument: ");Serial.println(ali_merim);
+  Serial.print("Odpiranje argument: ");Serial.println(odpiranje);
+  #endif
+
+ // Serial.print("Povprečjeo: ");Serial.println(povprecje);
   
   // demo mode:
   //if(demo){demo_flag=vrtenje(HITROST_MOTORJA,1,KORAKI-MOTORJA);if(demo_flag)smer!=smer;}  
   if(demo){/*vrtenje(HITROST_MOTORJA,1,100);*/}
-  else if(ali_merim||odpiranje)
+  else if(ali_merim||odpiranje) //z else if damo prednost demo-tu
   {
+  //  Serial.print("Povprečje1: ");Serial.println(povprecje);
     
   //za izpis na zaslonu računalnika:
   if(ali_merim){
-  mindwave.update(bluetooth, onMindwaveData);
-  //while(!Serial.available()){}
+
+  #ifdef DEBUG
+  Serial.print("Umirjenost: ");
+  #endif
+  //mindwave.update(bluetooth,onMindwaveData);
   Serial.println(umirjenost);
+
+  #ifdef DEBUG
+  Serial.print("Aktivno povprečje ali povprečje zadnjih 30 meritev? ");
+  #endif
+  
   Serial.println(meritve[ST_POVPRECIJ]!=0); //s tem ve če PC izpise "aktivno povprečje" ali "povprečje zadnjih 30 meritev"
+  
   //izracun povprecja:
-  if(stevec_meritev>ST_POVPRECIJ)stevec_meritev=0;
+  
+  if(stevec_meritev==ST_POVPRECIJ){stevec_meritev=0;Serial.println("stevec_meritev reset");}
+  mindwave.update(bluetooth,onMindwaveData);
   meritve[stevec_meritev]=umirjenost;
   stevec_meritev++;
-  for(int a=0;a<ST_POVPRECIJ;a++)
-  {
-    if(meritve[a]!=0)povprecje+=meritve[a];
-    else {povprecje/=a; break;}
+  for(uint16_t a=0;a<ST_POVPRECIJ;a++)
+  {uint16_t povprecje=0;
+    #ifdef DEBUG
+    Serial.print("meritve[a] = ");
+    Serial.println(meritve[a]);
+    #endif
+    if(meritve[a]!=0){povprecje+=meritve[a];}
+    else {povprecje/=((a+1)*(a==0)+a*(a>0));
+          #ifdef DEBUG
+          Serial.print("Povprečje: ");
+          #endif
+          Serial.println(povprecje);
+          break;}
+    if(a==(ST_POVPRECIJ-1))
+    {
+      povprecje/=((a+1)*(a==0)+a*(a>0));
+      #ifdef DEBUG
+      Serial.print("Povprečje: ");
+      #endif
+      Serial.println(povprecje);
+    }
   }
-  Serial.println(povprecje);
   }
   //regulacija ne naredi ničesar če je odpiranje=0
   //regulacija(meditacija,odpiranje); //mora bit vse po branju EEG v funkciji ker sicer nastanejo težave
