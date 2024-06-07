@@ -36,7 +36,7 @@ SoftwareSerial bluetooth(A2,8);
 const byte ST_POVPRECIJ=30;
 uint16_t meritve[ST_POVPRECIJ];
 byte umirjenost=0;
-byte *kazalec=&umirjenost;
+byte *umirjenost_pointer=&umirjenost;
 byte nastavitve;
 //uint16_t povprecje=0;
 
@@ -131,7 +131,7 @@ int onMindwaveData()
 //umirjenost=mindwave.meditation();
 //Serial.println(umirjenost);
 //Serial.println("bruh");
-//*kazalec=mindwave.meditation();
+//*umirjenost_pointer=mindwave.meditation();
 }
 //---------------------------------------------------------------------------------------------
 byte ReadOneByte() {
@@ -172,7 +172,7 @@ void EEG()
         poorQuality = 200;
        // attention = 0;
         //meditation = 0;
-        *kazalec=0;
+        *umirjenost_pointer=0;
         for(int i = 0; i < payloadLength; i++) {    // Parse the payload
           switch (payloadData[i]) {
           case 2:
@@ -186,7 +186,8 @@ void EEG()
             break;
           case 5:
             i++;
-            *kazalec = payloadData[i];
+            //shranimo v umirjenost_pointer za umirjenost
+            *umirjenost_pointer = payloadData[i];
             break;
           case 0x80:
             i = i + 3;
@@ -201,16 +202,14 @@ void EEG()
 
 #if DEBUG_EEG
 
-        // *** Add your code here ***
-
         if(bigPacket) {
           Serial.print("PoorQuality: ");
           Serial.println(poorQuality, DEC);
-          Serial.print(" Med: ");
-          Serial.println(*kazalec, DEC);
-          //Serial.print(" Time since last packet: ");
-          //Serial.print(millis() - lastReceivedPacket, DEC);
-          //lastReceivedPacket = millis();
+          Serial.print(" Umirjenost: ");
+          Serial.println(*umirjenost_pointer, DEC);
+          Serial.print(" Time since last packet: ");
+          Serial.print(millis() - lastReceivedPacket, DEC);
+          lastReceivedPacket = millis();
           Serial.print("\n");
                     
         }
@@ -224,20 +223,21 @@ void EEG()
   } // end if read 0xAA byte
 }
 //----------------------------------------------------------------------------
-// funkcija za obdelavo podatkov:
+// Funkcija za obdelavo podatkov:
+// VHODNI parametri: nastavitev stikal na UI plošči (DEMO, CSVLOG, ODPIRANJE ROŽE)
 void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
+  
   //demo mode spremenljivki:
   static bool demo_flag=0; //če sem prišel do zgornje ali spodnje meje
   static bool smer=1;      // da lahko spreminjam smer vrtejna v demo mode
  
- // static uint8_t meritve[ST_POVPRECIJ];
+  // spremenljivki za meritve:
   static byte stevec_meritev=0;
   static bool nastavitev_meritev=1;
 
+  //NASTAVITVI za motor (lahko spreminjaš):
   static int HITROST_MOTORJA=2000;
   static int KORAKI_MOTORJA=10000;
-
-  //spremenljivki za povprecje:
 
   //prvic po inicializaciji arraya meritve ga zafilamo z ničlami:
   if(nastavitev_meritev)
@@ -255,51 +255,55 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   
   // demo mode:
   if(demo){demo_flag=vrtenje(HITROST_MOTORJA,smer,KORAKI_MOTORJA);}
-  if(demo_flag){smer=!smer;
+  //ko roža pride do software maksimuma oz. do end switcha, flaga demo_flag na "1":
+  if(demo_flag){
+  smer=!smer; //spremenimo smer
   #if DEBUG_MOTOR
   Serial.println("smer swap");
   #endif
-  demo_flag=0;
-  delay(DEMO_CAKANJE);
+  demo_flag=0;//ponastavimo demo_flag
+  delay(DEMO_CAKANJE); //počakamo, da se lahko nagledamo odpre/zaprte rože
   }
   
-
+  //če se odločimo za CSVLOG ali odpiranje ROŽE
   else if(ali_merim||odpiranje) //z else if damo prednost demo-tu
-  {
-
-    
-  //za izpis na zaslonu računalnika:
+  {  
+  
+  //za izpis na zaslonu računalnika (CSVLOG):
   if(ali_merim){
-
+    
   #if DEBUG_MERITVE
   Serial.print("Umirjenost: ");
   Serial.println(umirjenost);
-  #endif
-
-
-  #if DEBUG_MERITVE
   Serial.print("Aktivno povprečje ali povprečje zadnjih 30 meritev? ");
   Serial.println(meritve[ST_POVPRECIJ]!=0); //s tem ve če PC izpise "aktivno povprečje" ali "povprečje zadnjih 30 meritev"
   #endif
   
-  
-  //izracun povprecja:
-  
+  // za ponastavitev kazalca v arrayu
   if(stevec_meritev==ST_POVPRECIJ){stevec_meritev=0;
   #if DEBUG_MERITVE
   Serial.println("stevec_meritev reset");
   #endif
   }
+  
   //mindwave.update(bluetooth,onMindwaveData);
   //umirjenost=mindwave.meditation();
+  //posodobimo spremeljivo umirjenost(imamo umirjenost_pointer)
   EEG();
-  //umirjenost=meditation;
+ 
   #if DEBUG_MERITVE
   Serial.print("Umirjenost2: ");
   #endif
-  Serial.println(*kazalec);
+
+  //izpišemo le v primeru, da izberemo CSVLOG:
+  if(ali_merim)Serial.println(*umirjenost_pointer);
+
+  //Izmerjen nivo umirjenosti shranimo v array 
+  //in premaknemo umirjenost_pointer na naslednje mesto:
   meritve[stevec_meritev]=umirjenost;
   stevec_meritev++;
+
+  //izračunamo povprečje in izpišemo glede na spremenljivko ali_merim:
   for(uint16_t a=0;a<ST_POVPRECIJ;a++)
   {uint16_t povprecje=0;
     #if DEBUG_MERITVE
@@ -310,16 +314,18 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
     else {povprecje/=((a+1)*(a==0)+a*(a>0));
           #if DEBUG_MERITVE
           Serial.print("Povprečje: ");
-          Serial.println(povprecje);
           #endif
-          break;}
+          if(ali_merim)Serial.println(povprecje);
+          break; //če srečamo element z vrednostjo 0 sklepamo, da so vsi preostali 0, povprečimo in zaključimo zanko
+          }
     if(a==(ST_POVPRECIJ-1))
     {
+      //izračun je prilagojen, da ne delimo z 0:
       povprecje/=((a+1)*(a==0)+a*(a>0));
       #if DEBUG_MERITVE
       Serial.print("Povprečje: ");
-      Serial.println(povprecje);
       #endif
+      if(ali_merim)Serial.println(povprecje);
     }
   }
   }
@@ -333,16 +339,21 @@ void regulacija(uint8_t vrednost,bool mode){}
 
 //----------------------------------------------------------------------------------------------------------
 void zapiranje_roze()
-{//ta funkcija home-a napravo, torej zapre celo rožo
-  bool utrip=0;
-  while(!(vrtenje(2000,0,1000))){
+{//Funkcija, ki home-a napravo, torej zapre celo rožo
+  
+  bool utrip=0; //za heartbeat START_LED (sočasno brlita zelena in rdeča štart LED)
+  //zanka se izhvaja dokler funkcija vrtenje ne vrne "1" (torej se vrti dokler ne zadane END_SWITCH
+  while(!(vrtenje(2000,0,1000))){ 
     digitalWrite(START_LED,utrip);
     utrip=!utrip;}
 }
 //----------------------------------------------------------------------------------------------
 //funkcija za vrtenje motorja:
+//VHODNI parametri: hitrost vrtenja, smer vrtenja (predznak hitrosti), število korako(ločljivost "korakov")
+//-> manjše število korakov pomeni hitrejša izvedba for zanke in vrnitev ven iz funkcije
+//VRNE: informacijo, če se je roža do konca zaprla (beremo stikalo END_SWITCH), ali pa do konca odprla (če je pozicija na definiranem maksimumu)
 bool vrtenje(int hitrost, bool smer, int stevilo_korakov){
-  //stevilo_korakov stela rezolucijo? vpliv na čas v for loopu
+
 static int MAX_POZICIJA_MOTORJA=5000; //vpliva na število obratov v poz smer
 static int stepsPerSecond;
 static int pozicija=1;
@@ -358,8 +369,7 @@ Serial.print(" | st_korakov: ");Serial.println(stevilo_korakov);
 // spremenljivka in predznak hitrosti določata če se spremenljivka pozicija povečuje ali zmanjšuje
 if(smer) stepsPerSecond = hitrost;
 else stepsPerSecond = -hitrost;
-
-//for zanka za v specifičnem obsegu:  
+ 
 for(int i=stevilo_korakov;i>0;--i){
    if (((stepsPerSecond > 0) && (pozicija < MAX_POZICIJA_MOTORJA))||((stepsPerSecond < 0) && digitalRead(END_SWITCH))) 
    {
@@ -367,14 +377,14 @@ for(int i=stevilo_korakov;i>0;--i){
     static uint8_t currentState = LOW;
 
     if (stepsPerSecond == 0)
-    { //if speed is 0, set the step pin to LOW to keep current position
+    { //če je stepsPerSecond enak 0 nastavimo pin za korak na 0, da se motor ne premika
         currentState = LOW;
         digitalWrite(PIN_STEP1_STEP, LOW);}
     else
     {
-        //if stepsPerSecond is not 0, then we need to calculate the next time to change the state of the driver
+        //če stepsPerSecond ni enak 0, potem je potrebno preračunati naslednji čas za spremembo stanja gonilnika TMC2209
         if (micros() > nextChange)
-        {   //Generate steps
+        {   //Generira korake
             if (currentState == LOW)
             {
                 currentState = HIGH;
@@ -385,14 +395,15 @@ for(int i=stevilo_korakov;i>0;--i){
             }
             else{currentState = LOW;nextChange = micros() + (1000 * abs(1000.0f / stepsPerSecond)) - 30;}
 
-            //Set direction based on the sign of stepsPerSecond
+            //Nastavi smer gelde ne predznak hitrosti oz. spremenljivke stepsPerSecond
             if (stepsPerSecond > 0){digitalWrite(PIN_STEP1_DIRECTION, LOW);}
             else{digitalWrite(PIN_STEP1_DIRECTION, HIGH);}
 
-            //Write out the step pin
+            //Zapiše izbrano stanje na pin za korak
             digitalWrite(PIN_STEP1_STEP, currentState);}
     }}}    
         digitalWrite(PIN_STEP1_STEP, LOW); //dodatna vrstica, preventivno da drži motor pri miru  
+//ponastavimo pozicijo, če roža zadane end switch. Vmes od zadnjega proženja morata miniti vsaj 2 sekundi + DEMO_CAKANJE
 if((!digitalRead(END_SWITCH))&&(stepsPerSecond<0)&&((micros()-micros_prej)>(2000000+DEMO_CAKANJE*1000)))
 {pozicija=0;micros_prej=micros();}
 #if DEBUG_MOTOR
@@ -406,28 +417,39 @@ return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond>0) || (pozicija==0 && s
 }
 //------------------------------------------------------------------------------------------------
 // funkcija za konfiguracijo glede na nastavitve na UI plošči
-
+// vrne masko glede na pritisnjena stikala: DEMO,LOG,ROŽA
 byte ui_config(void){
 
+//spremeljivke za stikala:
 static bool roza_stikalo;
 static bool csvlog_stikalo;
 static bool demo_stikalo;
 static bool start_gumb=0;
 
+//dokler ni pritisnjena start tipka, čaka:
 while(!start_gumb)
 {
+//vrednosti gumbov (PULLUP orientacija):
 start_gumb=!digitalRead(START_GUMB);
 roza_stikalo=!digitalRead(ROZA_STIKALO);
 csvlog_stikalo=!digitalRead(CSVLOG_STIKALO);
 demo_stikalo=!digitalRead(DEMO_STIKALO);
+
+//takoj prilagodimo prižgano lučko glede na stanje stikala:
 digitalWrite(START_LED,start_gumb);
 digitalWrite(ROZA_LED,roza_stikalo);
 digitalWrite(CSVLOG_LED,csvlog_stikalo);
 digitalWrite(DEMO_LED,demo_stikalo);
 }
-start_gumb=0;
 
+start_gumb=0;//resetiramo spremenljivko
+
+//izpis "mode"-ov za python interface,
+//če je pritisnjeno stikalo za CSVLOG:
+if((csvlog_stikalo<<1)&(0b010)){
 Serial.println((csvlog_stikalo<<1)&(0b010));
-Serial.println((roza_stikalo<<0)&(0b001));
+Serial.println((roza_stikalo<<0)&(0b001));}
+
+//vrne masko sestavljeno iz zamaknjenih bitov spremeljivk
 return (demo_stikalo<<2 | csvlog_stikalo<<1 | roza_stikalo<<0);
 }
