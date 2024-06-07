@@ -90,7 +90,15 @@ void setup() {
   //mindwave.setupe();
   
   Serial.begin(MINDWAVE_BAUDRATE);
-  mindwave.update(bluetooth);
+  
+  //mindwave.update(bluetooth);
+  delay(10000);
+  mindwave.update(bluetooth,onMindwaveData);
+  //Serial.println(umirjenost);
+  //delay(10000);
+  while(1){  mindwave.update(bluetooth,onMindwaveData);
+  //Serial.println(umirjenost);
+  }
   //home-anje roze:
   zapiranje_roze();
 }
@@ -329,7 +337,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   //EEG();
   uint8_t umirjenost_prej=umirjenost;
   while(umirjenost_prej==umirjenost)
-  {mindwave.update(bluetooth);
+  {mindwave.update(bluetooth,onMindwaveData);
   umirjenost=mindwave.meditation();
   Serial.print("prej: ");Serial.print(umirjenost_prej);
   Serial.print(" zdej: ");Serial.println(umirjenost);
