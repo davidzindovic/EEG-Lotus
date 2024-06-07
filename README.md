@@ -2,6 +2,7 @@ Navodila za uporabo:
 
 !!POMEMBNO!! Po prižigu naprave, poveži Mindwave Mobile 2 (naj ne bo na glavi takrat) tako, da ga prižgeš. Ko vidiš na HC-05, da sta se povezala, izklopi Mindwave Mobile 2 (po prvem utripu lučk po povezavi). Počakaj, da se odpovežeta (hitro utripanje LED pomeni da nista povezana), nato počakaj še cca 1 minuto ali več in ju poveži nazaj.
 P.s.: obstaja možnost, da se bosta že prvič povezala in uskladila. Načeloma po tem, ko se enkrat uskladita se bosta vsakič.
+P.S.S.: zgornji postopek je potrebno ponoviti tudi če ste prej uspešno povezali napravo, vendar ste Mindwave Mobile 2 disconnectali in nekaj časa (nekaj minut) neuporabljali.
 
 Prvo je potrebno konfigurirati HC-05 modul glede na MindWave Mobile 2 napravo. Torej s pomočjo AT ukazov in dveh vezav skonfiguriramo modul in spremenimo utripanje lučk, ki je skladno s povezavo med modulom in EEG merilnikom.
 --> najbolje opiše to ta članek: https://www.instructables.com/Brainwaves-Fly-a-Drone/
