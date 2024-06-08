@@ -4,6 +4,7 @@ Navodila za uporabo:
 P.s.: obstaja možnost, da se bosta že prvič povezala in uskladila. Načeloma po tem, ko se enkrat uskladita se bosta vsakič, vendar je bolj priporočeno uporabiti zgornjo metodo.
 P.S.S.: zgornji postopek je potrebno ponoviti tudi če ste prej uspešno povezali napravo, vendar ste Mindwave Mobile 2 disconnectali in nekaj časa (nekaj minut) neuporabljali.
 P.S.S.: Mindwave mobile 2 poveži (in odpoveži ter ponovno poveži - zgoraj napisan postopek) preden vzameš plato oz. dokler se zadeva home-a.
+P.S.S.S.: Ko se Mindwave mobile 2 in HC-05 povežeta se na Mindwave Mobile 2 v primeru low battery za trenutek barva spremeni iz rdeče v modro za trenutek, pri čemer se približno isto časno zasvetita/utripneta lučki na HC-05.
 
 Prvo je potrebno konfigurirati HC-05 modul za MindWave Mobile 2 napravo. Torej s pomočjo AT ukazov in dveh vezav skonfiguriramo modul in spremenimo utripanje lučk, ki je skladno s povezavo med modulom in EEG merilnikom.
 --> najbolje opiše to ta članek: https://www.instructables.com/Brainwaves-Fly-a-Drone/
