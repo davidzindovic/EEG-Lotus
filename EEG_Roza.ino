@@ -40,14 +40,16 @@
 
 #define BAUDRATE 57600      //BAUDRATE ZA MINDWAVE MOBILE
 
+#define MLOOP 10000
+
 #define SAFETY_CAKANJE 2000 //čas po odložitvi v ms
 #define DEMO_CAKANJE 1000   //čas pavze pri demo načinu
 
 //za odpiranje DEBUG izpisov na serijcu spremeni v 1:
 #define DEBUG_GENERIC 0
 #define DEBUG_MOTOR 0
-#define DEBUG_MERITVE 1
-#define DEBUG_EEG 1
+#define DEBUG_MERITVE 0
+#define DEBUG_EEG 0
 
 //inicializiramo še en serial stream:
 SoftwareSerial bluetooth(A2,8);
@@ -92,13 +94,12 @@ void setup() {
   Serial.begin(MINDWAVE_BAUDRATE);
   
   //mindwave.update(bluetooth);
-  delay(10000);
-  mindwave.update(bluetooth,onMindwaveData);
+  //delay(10000);
+  //mindwave.update(bluetooth,onMindwaveData);
   //Serial.println(umirjenost);
   //delay(10000);
-  while(1){  mindwave.update(bluetooth,onMindwaveData);
-  //Serial.println(umirjenost);
-  }
+  //while(1){mindwave.update(bluetooth,onMindwaveData);}
+  //for(int b=0;b<MLOOP;b++)mindwave.update(bluetooth,onMindwaveData);
   //home-anje roze:
   zapiranje_roze();
 }
@@ -111,7 +112,7 @@ static bool first_nastavitve=1;                           //spremenljivka za prv
 
 // prvič, ko zaženemo program, pridemo v ui_config in spremenimo flag, da ne pridemo več v ta del programa
 if(first_nastavitve){nastavitve=ui_config();first_nastavitve=!first_nastavitve;}
-
+while(1){mindwave.update(bluetooth,onMindwaveData);}
 //dokler je 
 while(analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)){
   #if DEBUG_GENERIC
@@ -153,6 +154,7 @@ void onMindwaveData(){
 //Serial.println(umirjenost);
 Serial.println("bruh");
 umirjenost=mindwave.meditation();
+Serial.println(umirjenost);
 }
 
 //---------------------------------------------------------------------------------------------
@@ -331,17 +333,17 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   #endif
 
   //izpišemo le v primeru, da izberemo CSVLOG:
-  if(ali_merim)Serial.println(*umirjenost_pointer);
+  //if(ali_merim)Serial.println(*umirjenost_pointer);
 
   //posodobimo spremeljivo umirjenost(imamo umirjenost_pointer)
-  //EEG();
   uint8_t umirjenost_prej=umirjenost;
   while(umirjenost_prej==umirjenost)
-  {mindwave.update(bluetooth,onMindwaveData);
-  umirjenost=mindwave.meditation();
-  Serial.print("prej: ");Serial.print(umirjenost_prej);
-  Serial.print(" zdej: ");Serial.println(umirjenost);
+  {
+  //če je samo dela meritve, vendar sekvenčni ukaz za motor ne dewa. Poglej!!
+  //verjetn lahko v onMindwaveData spraviš vse meritve(array) in povprečejnje!!!!!!!
+  mindwave.update(bluetooth,onMindwaveData);
   }
+  //vrtenje(2000,1,10000); 
   //Izmerjen nivo umirjenosti shranimo v array 
   //in premaknemo umirjenost_pointer na naslednje mesto:
   meritve[stevec_meritev]=umirjenost;
@@ -359,7 +361,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
           #if DEBUG_MERITVE
           Serial.print("Povprečje: ");
           #endif
-          if(ali_merim)Serial.println(povprecje);
+         //if(ali_merim)Serial.println(povprecje);
           break; //če srečamo element z vrednostjo 0 sklepamo, da so vsi preostali 0, povprečimo in zaključimo zanko
           }
     if(a==(ST_POVPRECIJ-1))
@@ -369,7 +371,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
       #if DEBUG_MERITVE
       Serial.print("Povprečje: ");
       #endif
-      if(ali_merim)Serial.println(povprecje);
+      //if(ali_merim)Serial.println(povprecje);
     }
   }
   }
