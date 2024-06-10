@@ -16,6 +16,7 @@
 
 //mindwave.h, objekti, funkcija se bo mogoče odstranila
 
+#include <TimerOne.h>
 #include <Mindwave.h>
 //Knjižnica za komuniciranje s HC-05 bluetooth modulom
 //(da lahko uporabljamo serijsko komunikacijo s PC-om)
@@ -44,9 +45,12 @@
 
 #define SAFETY_CAKANJE 2000 //čas po odložitvi v ms
 #define DEMO_CAKANJE 1000   //čas pavze pri demo načinu
+#define MODE_CHANGE_WAIT 5000
+
+#define EEG_POSKUSI 10
 
 //za odpiranje DEBUG izpisov na serijcu spremeni v 1:
-#define DEBUG_GENERIC 0
+#define DEBUG_GENERIC 1
 #define DEBUG_MOTOR 0
 #define DEBUG_MERITVE 0
 #define DEBUG_EEG 0
@@ -61,6 +65,8 @@ uint16_t meritve[ST_POVPRECIJ];
 byte umirjenost=0;
 byte *umirjenost_pointer=&umirjenost;
 byte nastavitve;
+
+uint8_t umirjenost_prej=0;
 
 //Maske za UI ploščo:
 byte mask_demo=0b100;
@@ -87,6 +93,9 @@ void setup() {
 
   pinMode(HALL_SENSOR,INPUT);
 
+  Timer1.initialize(1000000);
+  Timer1.attachInterrupt(EEG);
+
   //zaženemo software serial:
   bluetooth.begin(MINDWAVE_BAUDRATE);
   //mindwave.setupe();
@@ -112,7 +121,7 @@ static bool first_nastavitve=1;                           //spremenljivka za prv
 
 // prvič, ko zaženemo program, pridemo v ui_config in spremenimo flag, da ne pridemo več v ta del programa
 if(first_nastavitve){nastavitve=ui_config();first_nastavitve=!first_nastavitve;}
-while(1){mindwave.update(bluetooth,onMindwaveData);}
+//while(1){mindwave.update(bluetooth,onMindwaveData);}
 //dokler je 
 while(analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)){
   #if DEBUG_GENERIC
@@ -129,10 +138,11 @@ delay(SAFETY_CAKANJE); // po potrditvi konfiguracije in odložitvi ploščice im
 
 while((analogRead(HALL_SENSOR)>=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)) ){
 #if DEBUG_GENERIC
-Serial.print("GARBAM  parametri:");
+Serial.print("GARBAM\n  parametri:");
 Serial.print((nastavitve&mask_demo)==4);
 Serial.print((nastavitve&mask_log)==2);
-Serial.println((nastavitve&mask_roza)==1); 
+Serial.println((nastavitve&mask_roza)==1);
+Serial.print("HALL: ");Serial.println(Serial.print(analogRead(HALL_SENSOR)));
 #endif
 ObdelavaPodatkov((nastavitve&mask_demo)==4,(nastavitve&mask_log)==2,(nastavitve&mask_roza)==1);
 }
@@ -141,8 +151,10 @@ Serial.println("NE GARBAM");
 #endif
 if((nastavitve&mask_log)==2)Serial.println("stop"); // če smo merili pošjemo stop da python neha beležiti podatke
 for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
-zapiranje_roze();
 nastavitve=ui_config();
+delay(MODE_CHANGE_WAIT);
+zapiranje_roze();
+
 
 }
 //-----------------------------------------------------------------------------------------------
@@ -175,7 +187,9 @@ byte ReadOneByte() {
 //--------------------------------------------------------------------------------------------
 //Funkcija za branje EEG oz. obdelavo payloada od Neurosky:
 void EEG()
-{Serial.println("EEG");
+{
+  /*
+  Serial.println("EEG");
 // checksum variables
 //byte generatedChecksum = 0;
 uint16_t generatedChecksum = 0;
@@ -262,7 +276,14 @@ static bool bruh=0;
       }  // end if else for checksum
     } // end if read 0xAA byte
   } // end if read 0xAA byte
-}}
+}
+*/
+for(int i=0;i<EEG_POSKUSI;i++)
+{if(umirjenost_prej==umirjenost)mindwave.update(bluetooth,onMindwaveData);
+else break;
+}
+
+}
 //----------------------------------------------------------------------------
 // Funkcija za obdelavo podatkov:
 // VHODNI parametri: nastavitev stikal na UI plošči (DEMO, CSVLOG, ODPIRANJE ROŽE)
@@ -279,6 +300,8 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   //NASTAVITVI za motor (lahko spreminjaš):
   static int HITROST_MOTORJA=2000;
   static int KORAKI_MOTORJA=10000;
+
+  //static uint8_t umirjenost_prej=umirjenost;
 
   //prvic po inicializaciji arraya meritve ga zafilamo z ničlami:
   if(nastavitev_meritev)
@@ -336,18 +359,22 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   //if(ali_merim)Serial.println(*umirjenost_pointer);
 
   //posodobimo spremeljivo umirjenost(imamo umirjenost_pointer)
-  uint8_t umirjenost_prej=umirjenost;
-  while(umirjenost_prej==umirjenost)
-  {
+  //uint8_t umirjenost_prej=umirjenost;
+  //while(umirjenost_prej==umirjenost)
+  //{
   //če je samo dela meritve, vendar sekvenčni ukaz za motor ne dewa. Poglej!!
   //verjetn lahko v onMindwaveData spraviš vse meritve(array) in povprečejnje!!!!!!!
-  mindwave.update(bluetooth,onMindwaveData);
-  }
+  //mindwave.update(bluetooth,onMindwaveData);
+  //}
   //vrtenje(2000,1,10000); 
   //Izmerjen nivo umirjenosti shranimo v array 
   //in premaknemo umirjenost_pointer na naslednje mesto:
-  meritve[stevec_meritev]=umirjenost;
-  stevec_meritev++;
+  if(umirjenost_prej!=umirjenost){
+    meritve[stevec_meritev]=umirjenost;
+    stevec_meritev++;
+    umirjenost_prej=umirjenost;    
+  
+
 
   //izračunamo povprečje in izpišemo glede na spremenljivko ali_merim:
   for(uint16_t a=0;a<ST_POVPRECIJ;a++)
@@ -373,7 +400,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
       #endif
       //if(ali_merim)Serial.println(povprecje);
     }
-  }
+  }}
   }
   //regulacija ne naredi ničesar če je odpiranje=0
   //regulacija(meditacija,odpiranje); //mora bit vse po branju EEG v funkciji ker sicer nastanejo težave
