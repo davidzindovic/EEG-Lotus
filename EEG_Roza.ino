@@ -42,6 +42,8 @@
 #define BAUDRATE 57600      //BAUDRATE ZA MINDWAVE MOBILE
 
 #define MLOOP 10000
+#define MAX_POZICIJA_MOTORJA 29600  //1600 obratov @ 2000speed = 1 obrat; 
+//~18.5 obratov je do odprtja -> 1600*18.5=29600
 
 #define SAFETY_CAKANJE 2000 //čas po odložitvi v ms
 #define DEMO_CAKANJE 1000   //čas pavze pri demo načinu
@@ -93,6 +95,8 @@ void setup() {
 
   pinMode(HALL_SENSOR,INPUT);
 
+
+  //NUJNO TESTIRAJ:
   Timer1.initialize(1000000);
   Timer1.attachInterrupt(EEG);
 
@@ -102,13 +106,6 @@ void setup() {
   
   Serial.begin(MINDWAVE_BAUDRATE);
   
-  //mindwave.update(bluetooth);
-  //delay(10000);
-  //mindwave.update(bluetooth,onMindwaveData);
-  //Serial.println(umirjenost);
-  //delay(10000);
-  //while(1){mindwave.update(bluetooth,onMindwaveData);}
-  //for(int b=0;b<MLOOP;b++)mindwave.update(bluetooth,onMindwaveData);
   //home-anje roze:
   zapiranje_roze();
 }
@@ -426,8 +423,7 @@ void zapiranje_roze()
 //-> manjše število korakov pomeni hitrejša izvedba for zanke in vrnitev ven iz funkcije
 //VRNE: informacijo, če se je roža do konca zaprla (beremo stikalo END_SWITCH), ali pa do konca odprla (če je pozicija na definiranem maksimumu)
 bool vrtenje(int hitrost, bool smer, int stevilo_korakov){
-
-static int MAX_POZICIJA_MOTORJA=5000; //vpliva na število obratov v poz smer
+// +/TRUE smer je odpiranje, -/FALSE smer je zapiranje
 static int stepsPerSecond;
 static int pozicija=1;
 static uint32_t micros_prej=0;
@@ -463,7 +459,7 @@ for(int i=stevilo_korakov;i>0;--i){
                 currentState = HIGH;
                 nextChange = micros() + 30;
 
-                if ((stepsPerSecond > 0) && (pozicija<32348)){pozicija++;}
+                if ((stepsPerSecond > 0) && (pozicija<MAX_POZICIJA_MOTORJA)){pozicija++;}
                 else if ((stepsPerSecond < 0) && digitalRead(END_SWITCH)&&(pozicija>-32348)){pozicija--;}
             }
             else{currentState = LOW;nextChange = micros() + (1000 * abs(1000.0f / stepsPerSecond)) - 30;}
