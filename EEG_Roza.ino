@@ -442,7 +442,7 @@ bool vrtenje(int hitrost, bool smer, int stevilo_korakov){
 // +/TRUE smer je odpiranje, -/FALSE smer je zapiranje
 static int stepsPerSecond;
 static int pozicija=1;
-static uint32_t micros_prej=0;
+static uint32_t micros_prej=micros();;
 
 #if DEBUG_MOTOR
 Serial.println("vrtim");
@@ -456,7 +456,7 @@ if(smer) stepsPerSecond = hitrost;
 else stepsPerSecond = -hitrost;
  
 for(int i=stevilo_korakov;i>0;--i){
-   if (((stepsPerSecond > 0) && (pozicija > -32348))||((stepsPerSecond < 0) && digitalRead(END_SWITCH))) 
+   if (((stepsPerSecond > 0) && (pozicija > -32348))||((stepsPerSecond < 0) && (pozicija < MAX_POZICIJA_MOTORJA))) 
    {
     static unsigned long nextChange = 0;
     static uint8_t currentState = LOW;
@@ -489,8 +489,10 @@ for(int i=stevilo_korakov;i>0;--i){
     }}}    
         digitalWrite(PIN_STEP1_STEP, LOW); //dodatna vrstica, preventivno da drži motor pri miru  
 //ponastavimo pozicijo, če roža zadane end switch. Vmes od zadnjega proženja morata miniti vsaj 2 sekundi + DEMO_CAKANJE
-if((!digitalRead(END_SWITCH))&&(stepsPerSecond>0)&&((micros()-micros_prej)>(2000000+DEMO_CAKANJE*1000)))
-{pozicija=0;micros_prej=micros();}
+if((!digitalRead(END_SWITCH))&&(stepsPerSecond>0))
+{pozicija=0;
+//micros_prej=micros();
+}
 #if DEBUG_MOTOR
 Serial.print("pogoj1: ");Serial.print(pozicija>MAX_POZICIJA_MOTORJA && smer>0);
 Serial.print(" | pogoj2: ");Serial.print(pozicija==0 && smer<0);
