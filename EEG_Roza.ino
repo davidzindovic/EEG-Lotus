@@ -30,24 +30,28 @@
 //VEZAVA GUMBOV,STIKAL,LUČK:
 #define START_GUMB 5
 #define ROZA_STIKALO 6
-#define CSVLOG_STIKALO 7
-#define DEMO_STIKALO 9
-#define START_LED 10
-#define ROZA_LED 11
-#define CSVLOG_LED A1
-#define DEMO_LED 12
+#define CSVLOG_STIKALO A1
+#define DEMO_STIKALO 12
+#define START_LED 7
+#define ROZA_LED 9
+#define CSVLOG_LED 10
+#define DEMO_LED 11
 #define END_SWITCH 13
 #define HALL_SENSOR A0
 
 #define BAUDRATE 57600      //BAUDRATE ZA MINDWAVE MOBILE
 
-#define MLOOP 10000
+//hardcore hall vrednosti. Ponovno pomeri in spremeni v primeru spremembe pri magnetih:
+#define HALL_SENSOR_AVRG 475
+#define HALL_SENSOR_WIGGLE_ROOM 15
+
+//#define MLOOP 10000
 #define MAX_POZICIJA_MOTORJA 29600  //1600 obratov @ 2000speed = 1 obrat; 
 //~18.5 obratov je do odprtja -> 1600*18.5=29600
 
-#define SAFETY_CAKANJE 2000 //čas po odložitvi v ms
-#define DEMO_CAKANJE 1000   //čas pavze pri demo načinu
-#define MODE_CHANGE_WAIT 5000
+#define SAFETY_CAKANJE 5000 //čas po odložitvi v ms
+#define DEMO_CAKANJE 3000   //čas pavze pri demo načinu
+#define MODE_CHANGE_WAIT 3000
 
 #define EEG_POSKUSI 10
 
@@ -105,6 +109,9 @@ void setup() {
   //mindwave.setupe();
   
   Serial.begin(MINDWAVE_BAUDRATE);
+
+  //ČAKANJE PO VKLOPU, pred home-anjem:
+  delay(SAFETY_CAKANJE);
   
   //home-anje roze:
   zapiranje_roze();
@@ -112,15 +119,17 @@ void setup() {
 
 void loop() {
 
-static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //preberemo mirovno vrednost hall senzorja
-static uint16_t HALL_SENSOR_WIGGLE_ROOM=70;               //določimo možno odstopanje (je večje zaradi močnejšega magneta
+//pazi orientacijo močnejšega magneta:
+//static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //preberemo mirovno vrednost hall senzorja
+//static uint16_t HALL_SENSOR_WIGGLE_ROOM=40;               //določimo možno odstopanje (je večje zaradi močnejšega magneta
 static bool first_nastavitve=1;                           //spremenljivka za prvotno nastavitev
 
 // prvič, ko zaženemo program, pridemo v ui_config in spremenimo flag, da ne pridemo več v ta del programa
 if(first_nastavitve){nastavitve=ui_config();first_nastavitve=!first_nastavitve;}
 //while(1){mindwave.update(bluetooth,onMindwaveData);}
-//dokler je 
-while(analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)){
+
+//spremenjen pogoj zaradi zamenjave orientacije senzorja:
+while(analogRead(HALL_SENSOR)>=(HALL_SENSOR_AVRG+HALL_SENSOR_WIGGLE_ROOM)){
   #if DEBUG_GENERIC
   Serial.print("CAKAM DA ODLOZIS UI PLATO | HALL_SENOZOR:");
   Serial.print(analogRead(HALL_SENSOR));
@@ -133,7 +142,7 @@ while(analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)){
 
 delay(SAFETY_CAKANJE); // po potrditvi konfiguracije in odložitvi ploščice ima uporabnik SAFETY_CAKANJE/1000 sekund da umakne roko
 
-while((analogRead(HALL_SENSOR)>=(HALL_SENSOR_AVRG-HALL_SENSOR_WIGGLE_ROOM)) ){
+while((analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG+HALL_SENSOR_WIGGLE_ROOM)) ){
 #if DEBUG_GENERIC
 Serial.print("GARBAM\n  parametri:");
 Serial.print((nastavitve&mask_demo)==4);
