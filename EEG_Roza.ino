@@ -16,8 +16,8 @@
 
 //mindwave.h, objekti, funkcija se bo mogoče odstranila
 
-#include <TimerOne.h>
-#include <Mindwave.h>
+//#include <TimerOne.h>
+//#include <Mindwave.h>
 //Knjižnica za komuniciranje s HC-05 bluetooth modulom
 //(da lahko uporabljamo serijsko komunikacijo s PC-om)
 #include <SoftwareSerial.h>
@@ -53,6 +53,8 @@
 #define DEMO_CAKANJE 3000   //čas pavze pri demo načinu
 #define MODE_CHANGE_WAIT 3000
 
+#define END_SWITCH_TIMEOUT 20000000
+
 #define EEG_POSKUSI 10
 
 //za odpiranje DEBUG izpisov na serijcu spremeni v 1:
@@ -61,9 +63,11 @@
 #define DEBUG_MERITVE 0
 #define DEBUG_EEG 0
 
+#define MINDWAVE_BAUDRATE 57600
+
 //inicializiramo še en serial stream:
 SoftwareSerial bluetooth(A2,8);
-Mindwave mindwave;
+//Mindwave mindwave;
 
 //spremenljivke in array za umirjenost
 const byte ST_POVPRECIJ=30;
@@ -101,8 +105,8 @@ void setup() {
 
 
   //NUJNO TESTIRAJ:
-  Timer1.initialize(1000000);
-  Timer1.attachInterrupt(EEG);
+  //Timer1.initialize(1000000);
+  //Timer1.attachInterrupt(EEG);
 
   //zaženemo software serial:
   bluetooth.begin(MINDWAVE_BAUDRATE);
@@ -171,7 +175,7 @@ void onMindwaveData(){
 //umirjenost=mindwave.meditation();
 //Serial.println(umirjenost);
 Serial.println("bruh");
-umirjenost=mindwave.meditation();
+//umirjenost=mindwave.meditation();
 Serial.println(umirjenost);
 }
 
@@ -284,10 +288,10 @@ static bool bruh=0;
   } // end if read 0xAA byte
 }
 */
-for(int i=0;i<EEG_POSKUSI;i++)
-{if(umirjenost_prej==umirjenost)mindwave.update(bluetooth,onMindwaveData);
-else break;
-}
+//for(int i=0;i<EEG_POSKUSI;i++)
+//{if(umirjenost_prej==umirjenost)mindwave.update(bluetooth,onMindwaveData);
+//else break;
+//}
 
 }
 //----------------------------------------------------------------------------
@@ -297,7 +301,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   
   //demo mode spremenljivki:
   static bool demo_flag=0; //če sem prišel do zgornje ali spodnje meje
-  static bool smer=1;      // da lahko spreminjam smer vrtejna v demo mode
+  static bool smer=0;      // da lahko spreminjam smer vrtejna v demo mode
  
   // spremenljivki za meritve:
   static byte stevec_meritev=0;
@@ -422,7 +426,10 @@ void zapiranje_roze()
   
   bool utrip=0; //za heartbeat START_LED (sočasno brlita zelena in rdeča štart LED)
   //zanka se izhvaja dokler funkcija vrtenje ne vrne "1" (torej se vrti dokler ne zadane END_SWITCH
-  while(!(vrtenje(2000,0,1000))){ 
+  //ODPIRANJE HOME ZARAD END SWITCHA
+  uint32_t zacetni_cas_homanja=micros();
+  while(!(vrtenje(2000,1,1000))){
+    if((micros()-zacetni_cas_homanja)>END_SWITCH_TIMEOUT)break;//ce se homea predolg prekini homeanje
     digitalWrite(START_LED,utrip);
     utrip=!utrip;}
 }
@@ -449,7 +456,7 @@ if(smer) stepsPerSecond = hitrost;
 else stepsPerSecond = -hitrost;
  
 for(int i=stevilo_korakov;i>0;--i){
-   if (((stepsPerSecond > 0) && (pozicija < MAX_POZICIJA_MOTORJA))||((stepsPerSecond < 0) && digitalRead(END_SWITCH))) 
+   if (((stepsPerSecond > 0) && (pozicija > -32348))||((stepsPerSecond < 0) && digitalRead(END_SWITCH))) 
    {
     static unsigned long nextChange = 0;
     static uint8_t currentState = LOW;
@@ -468,8 +475,8 @@ for(int i=stevilo_korakov;i>0;--i){
                 currentState = HIGH;
                 nextChange = micros() + 30;
 
-                if ((stepsPerSecond > 0) && (pozicija<MAX_POZICIJA_MOTORJA)){pozicija++;}
-                else if ((stepsPerSecond < 0) && digitalRead(END_SWITCH)&&(pozicija>-32348)){pozicija--;}
+                if ((stepsPerSecond > 0) && digitalRead(END_SWITCH)&&(pozicija>-32348)){pozicija--;}
+                else if ((stepsPerSecond < 0) &&(pozicija<MAX_POZICIJA_MOTORJA)){pozicija++;}
             }
             else{currentState = LOW;nextChange = micros() + (1000 * abs(1000.0f / stepsPerSecond)) - 30;}
 
@@ -482,7 +489,7 @@ for(int i=stevilo_korakov;i>0;--i){
     }}}    
         digitalWrite(PIN_STEP1_STEP, LOW); //dodatna vrstica, preventivno da drži motor pri miru  
 //ponastavimo pozicijo, če roža zadane end switch. Vmes od zadnjega proženja morata miniti vsaj 2 sekundi + DEMO_CAKANJE
-if((!digitalRead(END_SWITCH))&&(stepsPerSecond<0)&&((micros()-micros_prej)>(2000000+DEMO_CAKANJE*1000)))
+if((!digitalRead(END_SWITCH))&&(stepsPerSecond>0)&&((micros()-micros_prej)>(2000000+DEMO_CAKANJE*1000)))
 {pozicija=0;micros_prej=micros();}
 #if DEBUG_MOTOR
 Serial.print("pogoj1: ");Serial.print(pozicija>MAX_POZICIJA_MOTORJA && smer>0);
@@ -491,7 +498,7 @@ Serial.print(" | pogoj3: ");Serial.println(!digitalRead(END_SWITCH));
 Serial.print("pozicija: ");Serial.print(pozicija);
 Serial.print(" | hitr: ");Serial.println(stepsPerSecond);
 #endif
-return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond>0) || (pozicija==0 && stepsPerSecond<0));
+return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0) || (pozicija==0 && stepsPerSecond>0));
 }
 //------------------------------------------------------------------------------------------------
 // funkcija za konfiguracijo glede na nastavitve na UI plošči
