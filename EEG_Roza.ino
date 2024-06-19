@@ -16,11 +16,13 @@
 
 //mindwave.h, objekti, funkcija se bo mogoče odstranila
 
-//#include <TimerOne.h>
-//#include <Mindwave.h>
+#include <TimerOne.h>
+#include <Mindwave.h>
 //Knjižnica za komuniciranje s HC-05 bluetooth modulom
 //(da lahko uporabljamo serijsko komunikacijo s PC-om)
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
+
+#include <AltSoftSerial.h>
 
 //VEZAVA ZA GONILNIK ZA KORAČNI MOTOR:
 #define PIN_STEP_ENABLE 2
@@ -55,33 +57,22 @@
 
 #define END_SWITCH_TIMEOUT 20000000
 
-#define EEG_POSKUSI 10
+#define EEG_POSKUSI 10000
 
 //za odpiranje DEBUG izpisov na serijcu spremeni v 1:
-#define DEBUG_GENERIC 1
+#define DEBUG_GENERIC 0
 #define DEBUG_MOTOR 0
 #define DEBUG_MERITVE 0
 #define DEBUG_EEG 0
 
-#define MINDWAVE_BAUDRATE 57600
+//#define MINDWAVE_BAUDRATE 57600
 
 //inicializiramo še en serial stream:
-SoftwareSerial bluetooth(A2,8);
-//Mindwave mindwave;
+//SoftwareSerial bluetooth(A2,8);
+AltSoftSerial bluetooth;
+Mindwave mindwave;
 
-//spremenljivke in array za umirjenost
-const byte ST_POVPRECIJ=30;
-uint16_t meritve[ST_POVPRECIJ];
-byte umirjenost=0;
-byte *umirjenost_pointer=&umirjenost;
-byte nastavitve;
-
-uint8_t umirjenost_prej=0;
-
-//Maske za UI ploščo:
-byte mask_demo=0b100;
-byte mask_log=0b010;
-byte mask_roza=0b001;
+uint8_t umir=0;
 
 void setup() {
   //inicializiramo pine za gonilnik;
@@ -105,12 +96,11 @@ void setup() {
 
 
   //NUJNO TESTIRAJ:
-  //Timer1.initialize(1000000);
+  //Timer1.initialize(2000000);
   //Timer1.attachInterrupt(EEG);
 
   //zaženemo software serial:
   bluetooth.begin(MINDWAVE_BAUDRATE);
-  //mindwave.setupe();
   
   Serial.begin(MINDWAVE_BAUDRATE);
 
@@ -127,6 +117,11 @@ void loop() {
 //static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //preberemo mirovno vrednost hall senzorja
 //static uint16_t HALL_SENSOR_WIGGLE_ROOM=40;               //določimo možno odstopanje (je večje zaradi močnejšega magneta
 static bool first_nastavitve=1;                           //spremenljivka za prvotno nastavitev
+static byte nastavitve;
+
+byte mask_demo=0b100;
+byte mask_log=0b010;
+byte mask_roza=0b001;
 
 // prvič, ko zaženemo program, pridemo v ui_config in spremenimo flag, da ne pridemo več v ta del programa
 if(first_nastavitve){nastavitve=ui_config();first_nastavitve=!first_nastavitve;}
@@ -160,7 +155,7 @@ ObdelavaPodatkov((nastavitve&mask_demo)==4,(nastavitve&mask_log)==2,(nastavitve&
 Serial.println("NE GARBAM");
 #endif
 if((nastavitve&mask_log)==2)Serial.println("stop"); // če smo merili pošjemo stop da python neha beležiti podatke
-for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
+//for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
 nastavitve=ui_config();
 delay(MODE_CHANGE_WAIT);
 zapiranje_roze();
@@ -174,9 +169,20 @@ void onMindwaveData(){
 //Serial.print("umirjenost loop: ");
 //umirjenost=mindwave.meditation();
 //Serial.println(umirjenost);
-Serial.println("bruh");
-//umirjenost=mindwave.meditation();
-Serial.println(umirjenost);
+//Serial.print("bruh  ");
+//umir=mindwave.meditation();
+  //Serial.print("headset 1");
+  //Serial.print("\tquality: ");
+  //Serial.println(mindwave.quality());
+  /*Serial.print("\tattention: ");
+  Serial.print(mindwave.attention());
+  Serial.print("\tmeditation: ");
+  Serial.print(mindwave.meditation());
+  Serial.print("\tlast update: ");
+  Serial.print(mindwave.lastUpdate());
+  Serial.println("ms ago   ");*/
+umir=mindwave.meditation();
+Serial.println(umir);
 }
 
 //---------------------------------------------------------------------------------------------
@@ -288,12 +294,21 @@ static bool bruh=0;
   } // end if read 0xAA byte
 }
 */
-//for(int i=0;i<EEG_POSKUSI;i++)
-//{if(umirjenost_prej==umirjenost)mindwave.update(bluetooth,onMindwaveData);
-//else break;
+//noInterrupts();
+//uint8_t prej=umir;
+//uint32_t cnt=0;
+//for(int i=0;i<(EEG_POSKUSI*10);i++)
+//while((umir==prej)/*&&(cnt<1000)*/)
+//{
+mindwave.update(bluetooth,onMindwaveData);
+//cnt++;
 //}
+//interrupts();
+//Serial.println(mindwave.meditation());
+//Serial.println("a");
 
 }
+void test(){}
 //----------------------------------------------------------------------------
 // Funkcija za obdelavo podatkov:
 // VHODNI parametri: nastavitev stikal na UI plošči (DEMO, CSVLOG, ODPIRANJE ROŽE)
@@ -306,13 +321,36 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   // spremenljivki za meritve:
   static byte stevec_meritev=0;
   static bool nastavitev_meritev=1;
+  const byte ST_POVPRECIJ=30;
+  static uint16_t meritve[ST_POVPRECIJ];
+  static bool eeg_kalibracija=1;
+  static uint32_t prejle=0;
 
+  static uint8_t umirjenost=0;
+  static uint8_t umirjenost_prej=0;
+  
   //NASTAVITVI za motor (lahko spreminjaš):
   static int HITROST_MOTORJA=2000;
   static int KORAKI_MOTORJA=10000;
 
   //static uint8_t umirjenost_prej=umirjenost;
-
+/*
+  if(eeg_kalibracija)
+  {
+    //for(int eeeg=0;eeeg<10000;eeeg++)
+    while(umir==0)
+    {
+      mindwave.update(bluetooth,onMindwaveData);
+    }
+    //umirjenost=mindwave.meditation();
+    if(umir!=0)
+    {
+        Timer1.initialize(10000);
+        Timer1.attachInterrupt(EEG);
+        eeg_kalibracija=0;
+    }   
+  }
+  */
   //prvic po inicializaciji arraya meritve ga zafilamo z ničlami:
   if(nastavitev_meritev)
   {
@@ -366,17 +404,34 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje) {
   #endif
 
   //izpišemo le v primeru, da izberemo CSVLOG:
-  //if(ali_merim)Serial.println(*umirjenost_pointer);
+  //if(ali_merim)Serial.println(umirjenost);
 
   //posodobimo spremeljivo umirjenost(imamo umirjenost_pointer)
-  //uint8_t umirjenost_prej=umirjenost;
-  //while(umirjenost_prej==umirjenost)
-  //{
+  /*if(umirjenost_prej==umirjenost)
+  {
   //če je samo dela meritve, vendar sekvenčni ukaz za motor ne dewa. Poglej!!
   //verjetn lahko v onMindwaveData spraviš vse meritve(array) in povprečejnje!!!!!!!
-  //mindwave.update(bluetooth,onMindwaveData);
-  //}
+  noInterrupts();
+  uint8_t num_update=0;
+  while(umirjenost_prej==umirjenost &&num_update<10)
+  {
+  //Serial.println("updejt");
+  mindwave.update(bluetooth,onMindwaveData);
+  num_update++;
+  }
+  interrupts();
+  }*/
+  //TOLE DELA LOL?
+  
+uint8_t eeg_prej=umir;
+//while(umir==eeg_prej){EEG();}
+//tole ne dela tho:
+while(umir==eeg_prej&&((micros()-prejle)>1100000)){EEG();}
+prejle=micros();
+//Serial.println(umir);
+  //TEST KOK MOTOR ČAKA:
   //vrtenje(2000,1,10000); 
+  //if(mindwave.bigPacket;
   //Izmerjen nivo umirjenosti shranimo v array 
   //in premaknemo umirjenost_pointer na naslednje mesto:
   if(umirjenost_prej!=umirjenost){
@@ -507,6 +562,9 @@ return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0) || (pozicija==0 && s
 // vrne masko glede na pritisnjena stikala: DEMO,LOG,ROŽA
 byte ui_config(void){
 
+byte mask_log=0b010;
+byte mask_roza=0b001;
+
 //spremeljivke za stikala:
 static bool roza_stikalo;
 static bool csvlog_stikalo;
@@ -533,9 +591,9 @@ start_gumb=0;//resetiramo spremenljivko
 
 //izpis "mode"-ov za python interface,
 //če je pritisnjeno stikalo za CSVLOG:
-if((csvlog_stikalo<<1)&(0b010)){
-Serial.println((csvlog_stikalo<<1)&(0b010));
-Serial.println((roza_stikalo<<0)&(0b001));}
+if((csvlog_stikalo<<1)&(mask_log)){
+Serial.println((csvlog_stikalo<<1)&(mask_log));
+Serial.println((roza_stikalo<<0)&(mask_roza));}
 
 //vrne masko sestavljeno iz zamaknjenih bitov spremeljivk
 return (demo_stikalo<<2 | csvlog_stikalo<<1 | roza_stikalo<<0);
