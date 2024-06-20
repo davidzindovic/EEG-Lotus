@@ -340,25 +340,19 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   //static bool nastavitev_meritev=1;
   const byte ST_POVPRECIJ=30;
   static uint16_t meritve[ST_POVPRECIJ];
-  static bool eeg_kalibracija=1;
+  //static bool eeg_kalibracija=1;
   static unsigned long prejle=0;
 
-  static uint8_t umirjenost=0;
+  //static uint8_t umirjenost=0;
   static uint8_t umirjenost_prej=0;
   
   //NASTAVITVI za motor (lahko spreminjaš):
   static int HITROST_MOTORJA=2000;
   static int KORAKI_MOTORJA=10000;
 
-  //static uint8_t umirjenost_prej=umirjenost;
-  //noInterrupts();
-  //umirjenost=umir;
-  //interrupts();
+
   
   //prvic po inicializaciji arraya meritve ga zafilamo z ničlami:
-  if(ali_merim&&reset_settings){Serial.println("gas");
-  //Timer1.restart();
-  }
   if(reset_settings)
   {
     for(byte a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
@@ -367,13 +361,17 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
 //a bo potrebno preden kličeš motorje shranit vrednost od micros()??
 if((micros()-prejle)>1000000){test();prejle=micros();}
 
+//ZA STESTIRAT:!!!!!!
+Serial.println(1);
+vrtenje(2000,1,100);
+Serial.println(2);  
+  
   #if DEBUG_GENERIC
   Serial.print("Demo argument: ");Serial.println(demo);
   Serial.print("ali_merim argument: ");Serial.println(ali_merim);
   Serial.print("Odpiranje argument: ");Serial.println(odpiranje);
   #endif
 
-  //Serial.println(bluetooth.available());
   // demo mode:
   if(demo){demo_flag=vrtenje(HITROST_MOTORJA,smer,KORAKI_MOTORJA);}
   //ko roža pride do software maksimuma oz. do end switcha, flaga demo_flag na "1":
@@ -413,7 +411,7 @@ if((micros()-prejle)>1000000){test();prejle=micros();}
   #endif
 
   //izpišemo le v primeru, da izberemo CSVLOG:
-  //if(ali_merim)Serial.println(umirjenost);
+  //if(ali_merim)Serial.println(umir);
 
 
 //dela:
@@ -422,10 +420,10 @@ if((micros()-prejle)>1000000){test();prejle=micros();}
 
   //Izmerjen nivo umirjenosti shranimo v array 
   //in premaknemo umirjenost_pointer na naslednje mesto:
-  if(umirjenost_prej!=umirjenost){
-    meritve[stevec_meritev]=umirjenost;
+  if(umirjenost_prej!=umir){
+    meritve[stevec_meritev]=umir;
     stevec_meritev++;
-    umirjenost_prej=umirjenost;    
+    umirjenost_prej=umir;    
   
 
 
