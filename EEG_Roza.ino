@@ -60,9 +60,9 @@
 //za odpiranje DEBUG izpisov na serijcu spremeni v 1:
 #define DEBUG_GENERIC 0
 #define DEBUG_MOTOR 0
-#define DEBUG_MERITVE 0
+#define DEBUG_MERITVE 1
 #define DEBUG_EEG 0
-#define CSVLOG 1
+#define CSVLOG 0
 
 //#define MINDWAVE_BAUDRATE 57600
 
@@ -337,7 +337,8 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   //demo mode spremenljivki:
   static bool demo_flag=0; //če sem prišel do zgornje ali spodnje meje
   static bool smer=0;      // da lahko spreminjam smer vrtejna v demo mode
- 
+
+  static bool print_flag=1;
   // spremenljivki za meritve:
   static byte stevec_meritev=0;
   //static bool nastavitev_meritev=1;
@@ -366,7 +367,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
 if(abs(micros()-prejle)>1000000){test();prejle=micros();}
 
 //ZA STESTIRAT:!!!!!!
-vrtenje(2000,1,100); 
+//vrtenje(2000,1,100); 
   
   #if DEBUG_GENERIC
   Serial.print("Demo argument: ");Serial.println(demo);
@@ -394,8 +395,11 @@ vrtenje(2000,1,100);
   if(ali_merim){
     
   #if DEBUG_MERITVE
-  Serial.print("Aktivno povprečje ali povprečje zadnjih 30 meritev? ");
-  Serial.println(meritve[ST_POVPRECIJ]!=0); //s tem ve če PC izpise "aktivno povprečje" ali "povprečje zadnjih 30 meritev"
+  if(print_flag){
+  Serial.print("Aktivno povprečje(0) ali povprečje zadnjih 30 meritev(1)? ");
+  Serial.println(meritve[ST_POVPRECIJ-1]!=0); //s tem ve če PC izpise "aktivno povprečje" ali "povprečje zadnjih 30 meritev"
+  print_flag=0;
+  }
   #endif
   #if CSVLOG
   Serial.println(meritve[ST_POVPRECIJ]!=0);
@@ -418,25 +422,31 @@ vrtenje(2000,1,100);
     meritve[stevec_meritev]=umir;
     stevec_meritev++;
     umirjenost_prej=umir;
-
-  #if DEBUG_MERITVE
-  Serial.print("Umirjenost: ");
-  Serial.println(umir);
-  #endif
-        
-  #if CSVLOG
-  Serial.println(umir);
-  #endif
+    print_flag=1;
+    
+    #if DEBUG_MERITVE
+    Serial.print("Umirjenost: ");
+    Serial.println(umir);
+    #endif
+          
+    #if CSVLOG
+    Serial.println(umir);
+    #endif
 
 
   //izračunamo povprečje in izpišemo glede na spremenljivko ali_merim:
+  uint16_t povprecje=0;
   for(uint16_t a=0;a<ST_POVPRECIJ;a++)
-  {uint16_t povprecje=0;
+  {
     #if DEBUG_MERITVE
-    Serial.print("meritve[a] = ");
-    Serial.println(meritve[a]);
+    Serial.print(a);
+    Serial.print(" meritve[a] = ");
+    Serial.print(meritve[a]);
     #endif
-
+    #if DEBUG_MERITVE
+    Serial.print(" |  Povprečje VMES: ");
+    Serial.println(povprecje);
+    #endif
     if(meritve[a]!=0){povprecje+=meritve[a];}
     else {povprecje/=((a+1)*(a==0)+a*(a>0));
           #if DEBUG_MERITVE
@@ -451,7 +461,7 @@ vrtenje(2000,1,100);
     if(a==(ST_POVPRECIJ-1))
     {
       //izračun je prilagojen, da ne delimo z 0:
-      povprecje/=((a+1)*(a==0)+a*(a>0));
+      povprecje/=ST_POVPRECIJ;
       #if DEBUG_MERITVE
       Serial.print("Povprečje: ");
       Serial.println(povprecje);
@@ -463,7 +473,7 @@ vrtenje(2000,1,100);
   }}
   }
   //regulacija ne naredi ničesar če je odpiranje=0
-  regulacija(meditacija,odpiranje); //mora bit vse po branju EEG v funkciji ker sicer nastanejo težave
+  //regulacija(meditacija,odpiranje); //mora bit vse po branju EEG v funkciji ker sicer nastanejo težave
   }
 }
 //-------------------------------------------------------------------------------------------------------
