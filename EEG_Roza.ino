@@ -16,7 +16,7 @@
 
 //mindwave.h, objekti, funkcija se bo mogoče odstranila
 
-#include <TimerOne.h>
+//#include <TimerOne.h>
 #include <Mindwave.h>
 //Knjižnica za komuniciranje s HC-05 bluetooth modulom
 //(da lahko uporabljamo serijsko komunikacijo s PC-om)
@@ -75,6 +75,12 @@ Mindwave mindwave;
 uint8_t umir=0;
 
 void setup() {
+
+ // Timer1.initialize(1000000);
+ //Timer1.attachInterrupt(test);
+  //Timer1.stop();
+//  delay(10);
+  
   //inicializiramo pine za gonilnik;
   pinMode(PIN_STEP_ENABLE,OUTPUT);
   pinMode(PIN_STEP1_DIRECTION,OUTPUT);
@@ -96,9 +102,7 @@ void setup() {
 
 
   //NUJNO TESTIRAJ:
-  Timer1.initialize(1000000);
-  Timer1.attachInterrupt(test);
-  Timer1.stop();
+
 
   //zaženemo software serial:
   bluetooth.begin(MINDWAVE_BAUDRATE);
@@ -116,7 +120,7 @@ void loop() {
 
 //pazi orientacijo močnejšega magneta:
 //static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //preberemo mirovno vrednost hall senzorja
-//static uint16_t HALL_SENSOR_WIGGLE_ROOM=40;               //določimo možno odstopanje (je večje zaradi močnejšega magneta
+//static uint16_t HALL_SENSOR_WIGGLE_ROOM=40;              //določimo možno odstopanje (je večje zaradi močnejšega magneta
 static bool first_nastavitve=1;                           //spremenljivka za prvotno nastavitev
 static byte nastavitve;
 static bool ponovna_nastavitev=1;
@@ -166,7 +170,7 @@ if(ponovna_nastavitev)ponovna_nastavitev=0;
 #if DEBUG_GENERIC
 Serial.println("NE GARBAM");
 #endif
-Timer1.stop();
+//Timer1.stop();
 if((nastavitve&mask_log)<=3&&(nastavitve&mask_log)>=1)Serial.println("stop"); // če smo merili pošjemo stop da python neha beležiti podatke
 //for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
 nastavitve=ui_config();
@@ -188,7 +192,7 @@ Serial.println(umir);
 //---------------------------------------------------------------------------------------------
 //Funkcija za branje enega byte-a iz payload stream-a (od software serial, lahko je tudi navaden serial)
 //VRNE prebran byte
-int ReadOneByte() {
+/*int ReadOneByte() {
   int ByteRead;
 
   //while(!bluetooth.available())Serial.println("nema"); //počakamo, dokler ne dobimo nečesa za prebrat
@@ -200,7 +204,7 @@ int ReadOneByte() {
 #endif
 
   return ByteRead;
-}
+}*/
 //--------------------------------------------------------------------------------------------
 //Funkcija za branje EEG oz. obdelavo payloada od Neurosky:
 /*
@@ -309,22 +313,18 @@ Serial.println("o");
 //------------------------------------------------------------------------------- 
 
 void test(){
-  //Timer1.stop();
+  Serial.println("a");
+  
   static bool ledica=0;
   uint8_t eeg_prej=umir;
-  if(bluetooth.available()){
+  if(bluetooth.available()>0){
+  
   digitalWrite(CSVLOG_LED,ledica);
   ledica=!ledica;
-  Serial.print("LED:");
-  Serial.println(ledica);
-  Serial.println("129");
   }
-noInterrupts();
+
   while(umir==eeg_prej){mindwave.update(bluetooth,onMindwaveData);}
   
-  interrupts();
-  //Timer1.restart();
-  Serial.println("teset");
   }
 //----------------------------------------------------------------------------
 // Funkcija za obdelavo podatkov:
@@ -341,7 +341,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   const byte ST_POVPRECIJ=30;
   static uint16_t meritve[ST_POVPRECIJ];
   static bool eeg_kalibracija=1;
-  static uint32_t prejle=0;
+  static unsigned long prejle=0;
 
   static uint8_t umirjenost=0;
   static uint8_t umirjenost_prej=0;
@@ -351,14 +351,21 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   static int KORAKI_MOTORJA=10000;
 
   //static uint8_t umirjenost_prej=umirjenost;
-
+  //noInterrupts();
+  //umirjenost=umir;
+  //interrupts();
+  
   //prvic po inicializaciji arraya meritve ga zafilamo z ničlami:
-  if(ali_merim&&reset_settings){Serial.println("gas");Timer1.restart();}
+  if(ali_merim&&reset_settings){Serial.println("gas");
+  //Timer1.restart();
+  }
   if(reset_settings)
   {
     for(byte a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
     //nastavitev_meritev=!nastavitev_meritev;
   }
+//a bo potrebno preden kličeš motorje shranit vrednost od micros()??
+if((micros()-prejle)>1000000){test();prejle=micros();}
 
   #if DEBUG_GENERIC
   Serial.print("Demo argument: ");Serial.println(demo);
@@ -366,7 +373,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   Serial.print("Odpiranje argument: ");Serial.println(odpiranje);
   #endif
 
-  
+  //Serial.println(bluetooth.available());
   // demo mode:
   if(demo){demo_flag=vrtenje(HITROST_MOTORJA,smer,KORAKI_MOTORJA);}
   //ko roža pride do software maksimuma oz. do end switcha, flaga demo_flag na "1":
@@ -415,10 +422,10 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
 
   //Izmerjen nivo umirjenosti shranimo v array 
   //in premaknemo umirjenost_pointer na naslednje mesto:
-  if(umirjenost_prej!=umir){
-    meritve[stevec_meritev]=umir;
+  if(umirjenost_prej!=umirjenost){
+    meritve[stevec_meritev]=umirjenost;
     stevec_meritev++;
-    umirjenost_prej=umir;    
+    umirjenost_prej=umirjenost;    
   
 
 
@@ -473,10 +480,6 @@ digitalWrite(START_LED,0);
     if((micros()-zacetni_cas_homanja)>END_SWITCH_TIMEOUT)break;//ce se homea predolg prekini homeanje
     digitalWrite(START_LED,utrip);
     utrip=!utrip;}
-  digitalWrite(ROZA_LED,1);
-digitalWrite(CSVLOG_LED,1);
-digitalWrite(DEMO_LED,1);
-digitalWrite(START_LED,1);
 }
 //----------------------------------------------------------------------------------------------
 //funkcija za vrtenje motorja:
