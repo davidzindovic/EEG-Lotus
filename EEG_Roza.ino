@@ -16,12 +16,10 @@
 
 //mindwave.h, objekti, funkcija se bo mogoče odstranila
 
-//#include <TimerOne.h>
 #include <Mindwave.h>
+
 //Knjižnica za komuniciranje s HC-05 bluetooth modulom
 //(da lahko uporabljamo serijsko komunikacijo s PC-om)
-//#include <SoftwareSerial.h>
-
 #include <AltSoftSerial.h>
 
 //VEZAVA ZA GONILNIK ZA KORAČNI MOTOR:
@@ -64,6 +62,7 @@
 #define DEBUG_MOTOR 0
 #define DEBUG_MERITVE 0
 #define DEBUG_EEG 0
+#define CSVLOG 1
 
 //#define MINDWAVE_BAUDRATE 57600
 
@@ -99,9 +98,6 @@ void setup() {
   pinMode(DEMO_LED,OUTPUT);
 
   pinMode(HALL_SENSOR,INPUT);
-
-
-  //NUJNO TESTIRAJ:
 
 
   //zaženemo software serial:
@@ -170,9 +166,10 @@ if(ponovna_nastavitev)ponovna_nastavitev=0;
 #if DEBUG_GENERIC
 Serial.println("NE GARBAM");
 #endif
-//Timer1.stop();
+
+#if CSVLOG
 if((nastavitve&mask_log)<=3&&(nastavitve&mask_log)>=1)Serial.println("stop"); // če smo merili pošjemo stop da python neha beležiti podatke
-//for(int a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
+#endif
 nastavitve=ui_config();
 ponovna_nastavitev=1;
 //delay(MODE_CHANGE_WAIT);
@@ -313,17 +310,23 @@ Serial.println("o");
 //------------------------------------------------------------------------------- 
 
 void test(){
-  Serial.println("a");
+  //Serial.println("a");
   
   static bool ledica=0;
   uint8_t eeg_prej=umir;
+
+  //načeloma za toglanje, ampak ga while preglasi:
   if(bluetooth.available()>0){
-  
   digitalWrite(CSVLOG_LED,ledica);
   ledica=!ledica;
   }
 
-  while(umir==eeg_prej){mindwave.update(bluetooth,onMindwaveData);}
+  //dokler smo v loopou gorita rdeča in rumena lučka CSVLOG
+  while(umir==eeg_prej){
+  mindwave.update(bluetooth,onMindwaveData);
+  digitalWrite(CSVLOG_LED,ledica);
+  ledica=!ledica;
+  }
   
   }
 //----------------------------------------------------------------------------
@@ -352,19 +355,18 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
 
 
   
-  //prvic po inicializaciji arraya meritve ga zafilamo z ničlami:
+  //prvic po inicializaciji arraya meritev ga zafilamo z ničlami
+  //oz. resetiramo ob ponovnem zagonu/spremembi mode-a:
   if(reset_settings)
   {
     for(byte a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
-    //nastavitev_meritev=!nastavitev_meritev;
   }
+  
 //a bo potrebno preden kličeš motorje shranit vrednost od micros()??
-if((micros()-prejle)>1000000){test();prejle=micros();}
+if(abs(micros()-prejle)>1000000){test();prejle=micros();}
 
 //ZA STESTIRAT:!!!!!!
-Serial.println(1);
-vrtenje(2000,1,100);
-Serial.println(2);  
+vrtenje(2000,1,100); 
   
   #if DEBUG_GENERIC
   Serial.print("Demo argument: ");Serial.println(demo);
@@ -392,39 +394,39 @@ Serial.println(2);
   if(ali_merim){
     
   #if DEBUG_MERITVE
-  Serial.print("Umirjenost: ");
-  Serial.println(umirjenost);
   Serial.print("Aktivno povprečje ali povprečje zadnjih 30 meritev? ");
   Serial.println(meritve[ST_POVPRECIJ]!=0); //s tem ve če PC izpise "aktivno povprečje" ali "povprečje zadnjih 30 meritev"
   #endif
+  #if CSVLOG
+  Serial.println(meritve[ST_POVPRECIJ]!=0);
+  #endif
+  
   
   // za ponastavitev kazalca v arrayu
   if(stevec_meritev==ST_POVPRECIJ){stevec_meritev=0;
   #if DEBUG_MERITVE
-  Serial.println("stevec_meritev reset");
+  Serial.println("stevec_meritev reset!");
   #endif
   }
   
- 
-  #if DEBUG_MERITVE
-  Serial.print("Umirjenost2: ");
-  #endif
-
-  //izpišemo le v primeru, da izberemo CSVLOG:
-  //if(ali_merim)Serial.println(umir);
 
 
-//dela:
-//uint8_t eeg_prej=umir;
-//while(umir==eeg_prej){mindwave.update(bluetooth,onMindwaveData);}
 
   //Izmerjen nivo umirjenosti shranimo v array 
   //in premaknemo umirjenost_pointer na naslednje mesto:
   if(umirjenost_prej!=umir){
     meritve[stevec_meritev]=umir;
     stevec_meritev++;
-    umirjenost_prej=umir;    
-  
+    umirjenost_prej=umir;
+
+  #if DEBUG_MERITVE
+  Serial.print("Umirjenost: ");
+  Serial.println(umir);
+  #endif
+        
+  #if CSVLOG
+  Serial.println(umir);
+  #endif
 
 
   //izračunamo povprečje in izpišemo glede na spremenljivko ali_merim:
@@ -434,12 +436,16 @@ Serial.println(2);
     Serial.print("meritve[a] = ");
     Serial.println(meritve[a]);
     #endif
+
     if(meritve[a]!=0){povprecje+=meritve[a];}
     else {povprecje/=((a+1)*(a==0)+a*(a>0));
           #if DEBUG_MERITVE
           Serial.print("Povprečje: ");
+          Serial.println(povprecje);
           #endif
-         //if(ali_merim)Serial.println(povprecje);
+          #if CSVLOG
+          if(ali_merim)Serial.println(povprecje);
+          #endif
           break; //če srečamo element z vrednostjo 0 sklepamo, da so vsi preostali 0, povprečimo in zaključimo zanko
           }
     if(a==(ST_POVPRECIJ-1))
@@ -448,13 +454,16 @@ Serial.println(2);
       povprecje/=((a+1)*(a==0)+a*(a>0));
       #if DEBUG_MERITVE
       Serial.print("Povprečje: ");
+      Serial.println(povprecje);
       #endif
-      //if(ali_merim)Serial.println(povprecje);
+      #if CSVLOG
+      if(ali_merim)Serial.println(povprecje);
+      #endif
     }
   }}
   }
   //regulacija ne naredi ničesar če je odpiranje=0
-  //regulacija(meditacija,odpiranje); //mora bit vse po branju EEG v funkciji ker sicer nastanejo težave
+  regulacija(meditacija,odpiranje); //mora bit vse po branju EEG v funkciji ker sicer nastanejo težave
   }
 }
 //-------------------------------------------------------------------------------------------------------
@@ -582,9 +591,11 @@ start_gumb=0;//resetiramo spremenljivko
 
 //izpis "mode"-ov za python interface,
 //če je pritisnjeno stikalo za CSVLOG:
+#if CSVLOG
 if((csvlog_stikalo<<1)&(mask_log)){
 Serial.println((csvlog_stikalo<<1)&(mask_log));
 Serial.println((roza_stikalo<<0)&(mask_roza));}
+#endif
 
 //vrne masko sestavljeno iz zamaknjenih bitov spremeljivk
 return (demo_stikalo<<2 | csvlog_stikalo<<1 | roza_stikalo<<0);
