@@ -576,10 +576,10 @@ byte mask_log=0b010;
 byte mask_roza=0b001;
 
 //spremeljivke za stikala:
-static bool roza_stikalo;
-static bool csvlog_stikalo;
-static bool demo_stikalo;
-static bool start_gumb=0;
+bool roza_stikalo;
+bool csvlog_stikalo;
+bool demo_stikalo;
+bool start_gumb=0;
 
 //dokler ni pritisnjena start tipka, čaka:
 while(!start_gumb)
