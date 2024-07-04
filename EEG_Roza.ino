@@ -46,6 +46,9 @@
 #define HALL_SENSOR_WIGGLE_ROOM 15
 
 //#define MLOOP 10000
+#define HITROST_MOTORJA 2000
+#define KORAKI_MOTORJA 2000
+#define MAX_SPREMEMBA 8 //se da spreminjat pomojm
 #define MAX_POZICIJA_MOTORJA 29600  //1600 obratov @ 2000speed = 1 obrat; 
 //~18.5 obratov je do odprtja -> 1600*18.5=29600
 
@@ -183,7 +186,10 @@ ponovna_nastavitev=1;
 void onMindwaveData(){
 
 umir=mindwave.meditation();
+#if DEBUG_MERITVE
+Serial.print("umirjenost data: ");
 Serial.println(umir);
+#endif
 }
 
 //---------------------------------------------------------------------------------------------
@@ -309,7 +315,7 @@ Serial.println("o");
 //}
 //------------------------------------------------------------------------------- 
 
-void test(){
+void meritvice(bool ali_reguliram){
   //Serial.println("a");
   
   static bool ledica=0;
@@ -327,6 +333,7 @@ void test(){
   digitalWrite(CSVLOG_LED,ledica);
   ledica=!ledica;
   }
+  if(ali_reguliram)regulacija(umir);
   
   }
 //----------------------------------------------------------------------------
@@ -350,9 +357,9 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   //static uint8_t umirjenost=0;
   static uint8_t umirjenost_prej=0;
   
-  //NASTAVITVI za motor (lahko spreminjaš):
-  static int HITROST_MOTORJA=2000;
-  static int KORAKI_MOTORJA=10000;
+  //Je v #define
+  //static int HITROST_MOTORJA=2000;
+  //static int KORAKI_MOTORJA=10000;
 
 
   
@@ -364,7 +371,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   }
   
 //a bo potrebno preden kličeš motorje shranit vrednost od micros()??
-if(abs(micros()-prejle)>1000000){test();prejle=micros();}
+if(abs(micros()-prejle)>1000000){meritvice(odpiranje);prejle=micros();}
 
 //ZA STESTIRAT:!!!!!!
 //vrtenje(2000,1,100); 
@@ -376,7 +383,7 @@ if(abs(micros()-prejle)>1000000){test();prejle=micros();}
   #endif
 
   // demo mode:
-  if(demo){demo_flag=vrtenje(HITROST_MOTORJA,smer,KORAKI_MOTORJA);}
+  if(demo){demo_flag=vrtenje(HITROST_MOTORJA,smer,KORAKI_MOTORJA,-1);}
   //ko roža pride do software maksimuma oz. do end switcha, flaga demo_flag na "1":
   if(demo_flag){
   smer=!smer; //spremenimo smer
@@ -483,7 +490,8 @@ void regulacija(unsigned int trenutno_stanje)
 static unsigned int pozicija_cilj;
 static int motor=0;
 static int delta_motor=0;
-int regulacijsko povprecje;
+int regulacijsko_povprecje;
+static unsigned meditacija_prej;
 
 if(first_reg!=false || trenutno_stanje!=0) //preventiva za prvo izvedbo
 { // upoštevamo novo vrednost meditacije oz. umirjenosti in pomnimo le zadnjo prejšnjo:
@@ -525,16 +533,17 @@ else if (motor<0) motor=0;
 pozicija_cilj=map(motor,0,100,0,9534);
 
 #if DEBUG_REGULACIJE
-Serial.print("Pozicija: ");
-Serial.print(pozicija);
+//Serial.print("Pozicija: ");
+//Serial.print(pozicija);
 Serial.print(" | Pozicija cilj: ");
 Serial.println(pozicija_cilj);
 #endif
 
 // zančno primerjamo trenutno in ciljno pozicijo ter obračamo motor
-while(pozicija!=pozicija_cilj)
+while(!(vrtenje(HITROST_MOTORJA,0,KORAKI_MOTORJA,pozicija_cilj)))
+// vmesni pogoj definira smer vrtenja
 {
-  vrtenje(HITROST_MOTORJA,pozicija<pozicija_cilj,KORAKI_MOTORJA,pozicija_cilj); // vmesni pogoj definira smer vrtenja
+//  vrtenje(HITROST_MOTORJA,pozicija<pozicija_cilj,KORAKI_MOTORJA,pozicija_cilj); // vmesni pogoj definira smer vrtenja
 }                                                                 
 }
 
@@ -562,10 +571,10 @@ digitalWrite(START_LED,0);
 //-> manjše število korakov pomeni hitrejša izvedba for zanke in vrnitev ven iz funkcije
 //VRNE: informacijo, če se je roža do konca zaprla (beremo stikalo END_SWITCH), ali pa do konca odprla (če je pozicija na definiranem maksimumu)
 
-bool vrtenje(int hitrost, bool smer, int stevilo_korakov,/*int*/ unsigned int poz_cilj){ //če ne želimo uporabljati regulacij nastavimo cilj na -1
+bool vrtenje(int hitrost, bool smer, int stevilo_korakov,int poz_cilj){ //če ne želimo uporabljati regulacij nastavimo cilj na -1
 // +/TRUE smer je odpiranje, -/FALSE smer je zapiranje
 static int stepsPerSecond;
-static /*int*/ unsigned int pozicija=1;
+static unsigned int pozicija=1;
 static uint32_t micros_prej=micros();;
 //ZAKOMENTIRANI DELI KER TESTIRAM ČE JE KUL
 #if DEBUG_MOTOR
@@ -576,11 +585,14 @@ Serial.print(" | st_korakov: ");Serial.println(stevilo_korakov);
 #endif
 
 // spremenljivka in predznak hitrosti določata če se spremenljivka pozicija povečuje ali zmanjšuje
+if(poz_cilj!=-1){
 if(smer) stepsPerSecond = hitrost;
+else stepsPerSecond = -hitrost;}
+else if (pozicija<poz_cilj) {stepsPerSecond = hitrost;} //PREVERI PREDZNAKE!!!!
 else stepsPerSecond = -hitrost;
- 
+ //če poz>0 ni ok daj nazaj >-32348
 for(int i=stevilo_korakov;(i>0)&&(pozicija!=poz_cilj);--i){
-   if (((stepsPerSecond > 0) && (pozicija > /*-32348*/0))||((stepsPerSecond < 0) && (pozicija < MAX_POZICIJA_MOTORJA))) 
+   if (((stepsPerSecond > 0) && (pozicija > 0))||((stepsPerSecond < 0) && (pozicija < MAX_POZICIJA_MOTORJA))) 
    {
     static unsigned long nextChange = 0;
     static uint8_t currentState = LOW;
@@ -599,7 +611,7 @@ for(int i=stevilo_korakov;(i>0)&&(pozicija!=poz_cilj);--i){
                 currentState = HIGH;
                 nextChange = micros() + 30;
 
-                if ((stepsPerSecond > 0) && digitalRead(END_SWITCH)&&(pozicija>/*-32348*/0)){pozicija--;}
+                if ((stepsPerSecond > 0) && digitalRead(END_SWITCH)&&(pozicija>0)){pozicija--;}
                 else if ((stepsPerSecond < 0) &&(pozicija<MAX_POZICIJA_MOTORJA)){pozicija++;}
             }
             else{currentState = LOW;nextChange = micros() + (1000 * abs(1000.0f / stepsPerSecond)) - 30;}
@@ -624,7 +636,8 @@ Serial.print(" | pogoj3: ");Serial.println(!digitalRead(END_SWITCH));
 Serial.print("pozicija: ");Serial.print(pozicija);
 Serial.print(" | hitr: ");Serial.println(stepsPerSecond);
 #endif
-return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0) || (pozicija==0 && stepsPerSecond>0));
+//vrne če je roža prišla do keregakol ekstrema ali pa do cilja
+return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0) || (pozicija==0 && stepsPerSecond>0) || (pozicija==poz_cilj));
 }
 //------------------------------------------------------------------------------------------------
 // funkcija za konfiguracijo glede na nastavitve na UI plošči
