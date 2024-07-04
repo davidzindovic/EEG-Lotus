@@ -60,8 +60,8 @@
 //za odpiranje DEBUG izpisov na serijcu spremeni v 1:
 #define DEBUG_GENERIC 0
 #define DEBUG_MOTOR 0
-#define DEBUG_MERITVE 1
-#define DEBUG_EEG 0
+#define DEBUG_MERITVE 0
+#define DEBUG_REGULACIJE 0
 #define CSVLOG 0
 
 //#define MINDWAVE_BAUDRATE 57600
@@ -478,7 +478,65 @@ if(abs(micros()-prejle)>1000000){test();prejle=micros();}
 }
 //-------------------------------------------------------------------------------------------------------
 //funkcija za regulacijo:
-void regulacija(uint8_t vrednost,bool mode){}
+void regulacija(unsigned int trenutno_stanje)
+{static bool first_reg=false;
+static unsigned int pozicija_cilj;
+static int motor=0;
+static int delta_motor=0;
+int regulacijsko povprecje;
+
+if(first_reg!=false || trenutno_stanje!=0) //preventiva za prvo izvedbo
+{ // upoštevamo novo vrednost meditacije oz. umirjenosti in pomnimo le zadnjo prejšnjo:
+ if (first_reg==false)
+  {
+  if(trenutno_stanje!=meditacija_prej)meditacija_prej=trenutno_stanje;//regulacija(meditacija_prej,trenutno_stanje);
+  first_reg=!first_reg;
+  }
+ else
+  { // računamo regulacijsko povprečje z aritmetično sredino (in prilagajamo glede na vrednosti meditacij zdej in prej)
+   if(trenutno_stanje>meditacija_prej)regulacijsko_povprecje=(trenutno_stanje-(trenutno_stanje-meditacija_prej)/2);
+   else regulacijsko_povprecje=(trenutno_stanje+(-trenutno_stanje+meditacija_prej)/2);
+   meditacija_prej=trenutno_stanje;
+  }
+}
+ // uporabimo regulacijske vrednosti za določitev premika motorja, pazimo na overflow:
+ if(abs(regulacijsko_povprecje-motor)>MAX_SPREMEMBA) delta_motor=MAX_SPREMEMBA*(regulacijsko_povprecje-motor)/abs(regulacijsko_povprecje-motor); //zadnji del je za predznak
+ else delta_motor=regulacijsko_povprecje-motor; 
+
+// premik shranimo v spremenljivko:
+motor+=delta_motor;
+
+#if DEBUG_REGULACIJE
+Serial.print("Meditacija: ");
+Serial.print(umir);
+Serial.print(" | Trenutno stanje: ");
+Serial.print(trenutno_stanje);
+Serial.print(" | Regulacijsko povprečje: ");
+Serial.print(regulacijsko_povprecje);
+Serial.print(" | Motor: ");
+Serial.println(motor);
+#endif
+
+// Preventiva, da ne bo težav pri mapiranju:
+if (motor>100) motor=100;
+else if (motor<0) motor=0;
+
+// mappamo od 0 do max obratov
+pozicija_cilj=map(motor,0,100,0,9534);
+
+#if DEBUG_REGULACIJE
+Serial.print("Pozicija: ");
+Serial.print(pozicija);
+Serial.print(" | Pozicija cilj: ");
+Serial.println(pozicija_cilj);
+#endif
+
+// zančno primerjamo trenutno in ciljno pozicijo ter obračamo motor
+while(pozicija!=pozicija_cilj)
+{
+  vrtenje(HITROST_MOTORJA,pozicija<pozicija_cilj,KORAKI_MOTORJA,pozicija_cilj); // vmesni pogoj definira smer vrtenja
+}                                                                 
+}
 
 //----------------------------------------------------------------------------------------------------------
 void zapiranje_roze()
@@ -493,7 +551,7 @@ digitalWrite(START_LED,0);
   //zanka se izhvaja dokler funkcija vrtenje ne vrne "1" (torej se vrti dokler ne zadane END_SWITCH
   //ODPIRANJE HOME ZARAD END SWITCHA
   uint32_t zacetni_cas_homanja=micros();
-  while(!(vrtenje(2000,1,1000))){
+  while(!(vrtenje(2000,1,1000,-1))){
     if((micros()-zacetni_cas_homanja)>END_SWITCH_TIMEOUT)break;//ce se homea predolg prekini homeanje
     digitalWrite(START_LED,utrip);
     utrip=!utrip;}
@@ -503,12 +561,13 @@ digitalWrite(START_LED,0);
 //VHODNI parametri: hitrost vrtenja, smer vrtenja (predznak hitrosti), število korako(ločljivost "korakov")
 //-> manjše število korakov pomeni hitrejša izvedba for zanke in vrnitev ven iz funkcije
 //VRNE: informacijo, če se je roža do konca zaprla (beremo stikalo END_SWITCH), ali pa do konca odprla (če je pozicija na definiranem maksimumu)
-bool vrtenje(int hitrost, bool smer, int stevilo_korakov){
+
+bool vrtenje(int hitrost, bool smer, int stevilo_korakov,/*int*/ unsigned int poz_cilj){ //če ne želimo uporabljati regulacij nastavimo cilj na -1
 // +/TRUE smer je odpiranje, -/FALSE smer je zapiranje
 static int stepsPerSecond;
-static int pozicija=1;
+static /*int*/ unsigned int pozicija=1;
 static uint32_t micros_prej=micros();;
-
+//ZAKOMENTIRANI DELI KER TESTIRAM ČE JE KUL
 #if DEBUG_MOTOR
 Serial.println("vrtim");
 Serial.print("hitrost: ");Serial.print(hitrost);
@@ -520,8 +579,8 @@ Serial.print(" | st_korakov: ");Serial.println(stevilo_korakov);
 if(smer) stepsPerSecond = hitrost;
 else stepsPerSecond = -hitrost;
  
-for(int i=stevilo_korakov;i>0;--i){
-   if (((stepsPerSecond > 0) && (pozicija > -32348))||((stepsPerSecond < 0) && (pozicija < MAX_POZICIJA_MOTORJA))) 
+for(int i=stevilo_korakov;(i>0)&&(pozicija!=poz_cilj);--i){
+   if (((stepsPerSecond > 0) && (pozicija > /*-32348*/0))||((stepsPerSecond < 0) && (pozicija < MAX_POZICIJA_MOTORJA))) 
    {
     static unsigned long nextChange = 0;
     static uint8_t currentState = LOW;
@@ -540,7 +599,7 @@ for(int i=stevilo_korakov;i>0;--i){
                 currentState = HIGH;
                 nextChange = micros() + 30;
 
-                if ((stepsPerSecond > 0) && digitalRead(END_SWITCH)&&(pozicija>-32348)){pozicija--;}
+                if ((stepsPerSecond > 0) && digitalRead(END_SWITCH)&&(pozicija>/*-32348*/0)){pozicija--;}
                 else if ((stepsPerSecond < 0) &&(pozicija<MAX_POZICIJA_MOTORJA)){pozicija++;}
             }
             else{currentState = LOW;nextChange = micros() + (1000 * abs(1000.0f / stepsPerSecond)) - 30;}
