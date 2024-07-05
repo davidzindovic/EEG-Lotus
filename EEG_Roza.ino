@@ -56,8 +56,10 @@
 #define DEMO_CAKANJE 3000   //čas pavze pri demo načinu
 #define MODE_CHANGE_WAIT 3000
 
-#define END_SWITCH_TIMEOUT 20000000
-#define OPENING_TIMEOUT 20000000
+#define END_SWITCH_TIMEOUT 30000000
+#define OPENING_TIMEOUT 30000000 //enak cas predviden za doseg obeh ekstremov
+
+#define MAX_POMOTA_ODPIRANJA 100 //kolikokrat lahko for loop deluje, če je na nuli(pozicija) in end switch ne prime
 
 #define EEG_POSKUSI 10000
 
@@ -65,7 +67,7 @@
 #define DEBUG_GENERIC 0
 #define DEBUG_MOTOR 0
 #define DEBUG_MERITVE 0
-#define DEBUG_REGULACIJE 1
+#define DEBUG_REGULACIJE 0
 #define CSVLOG 0
 
 //#define MINDWAVE_BAUDRATE 57600
@@ -123,7 +125,7 @@ void loop() {
 //static uint16_t HALL_SENSOR_WIGGLE_ROOM=40;              //določimo možno odstopanje (je večje zaradi močnejšega magneta
 static bool first_nastavitve=1;                           //spremenljivka za prvotno nastavitev
 static byte nastavitve;
-static bool ponovna_nastavitev=1;
+static bool ponovna_nastavitev=0;
 //static bool toggle=0;
 
 byte mask_demo=0b100;
@@ -148,13 +150,13 @@ while(analogRead(HALL_SENSOR)>=(HALL_SENSOR_AVRG+HALL_SENSOR_WIGGLE_ROOM)){
   } //dokler je UI plošča odmaknjena naprava čaka
 
 delay(SAFETY_CAKANJE); // po potrditvi konfiguracije in odložitvi ploščice ima uporabnik SAFETY_CAKANJE/1000 sekund da umakne roko
-zapiranje_roze();
+if(ponovna_nastavitev)zapiranje_roze();
 digitalWrite(ROZA_LED,(nastavitve&mask_roza)==1);
 digitalWrite(CSVLOG_LED,(nastavitve&mask_log)==2);
 digitalWrite(DEMO_LED,(nastavitve&mask_demo)==4);
 digitalWrite(START_LED,1);
 delay(MODE_CHANGE_WAIT);
-
+if(!ponovna_nastavitev)ponovna_nastavitev=1;
 while((analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG+HALL_SENSOR_WIGGLE_ROOM)) ){
 #if DEBUG_GENERIC
 Serial.print("GARBAM\n  parametri:");
@@ -317,7 +319,6 @@ Serial.println("o");
 //------------------------------------------------------------------------------- 
 
 void meritvice(bool ali_reguliram){
-  //Serial.println("a");
   
   static bool ledica=0;
   uint8_t eeg_prej=umir;
@@ -397,10 +398,10 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   //če se odločimo za CSVLOG ali odpiranje ROŽE
   else if(ali_merim||odpiranje) //z else if damo prednost demo-tu
   {  
-  
+    if(abs(micros()-prejle)>1000000){meritvice(odpiranje);prejle=micros();}
   //za izpis na zaslonu računalnika (CSVLOG):
-  if(ali_merim){
-  if(abs(micros()-prejle)>1000000){meritvice(odpiranje);prejle=micros();}
+  if(ali_merim){ //merjenje je samo za beleženje in povprečenje
+
   #if DEBUG_MERITVE
   if(print_flag){
   Serial.print("Aktivno povprečje(0) ali povprečje zadnjih 30 meritev(1)? ");
@@ -541,13 +542,10 @@ Serial.println(pozicija_cilj);
 #endif
 prevent=0;
 // zančno primerjamo trenutno in ciljno pozicijo ter obračamo motor
-while(!(vrtenje(HITROST_MOTORJA,0,KORAKI_MOTORJA,pozicija_cilj)))
+while(!(vrtenje(HITROST_MOTORJA,0,KORAKI_MOTORJA,MAX_POZICIJA_MOTORJA-pozicija_cilj))) 
 // vmesni pogoj definira smer vrtenja
 {
-
-//  vrtenje(HITROST_MOTORJA,pozicija<pozicija_cilj,KORAKI_MOTORJA,pozicija_cilj); // vmesni pogoj definira smer vrtenja
-//if(prevent>=10)break;
-//prevent++;
+//manjsa cifra je bolj odprta roza, zato rabis max-trenutno futrat kot cilj
 }                                                                 
 }
 
@@ -587,7 +585,7 @@ digitalWrite(START_LED,0);
 bool vrtenje(int hitrost, bool smer, int stevilo_korakov,int poz_cilj){ //če ne želimo uporabljati regulacij nastavimo cilj na -1
 // +/TRUE smer je odpiranje, -/FALSE smer je zapiranje
 static int stepsPerSecond;
-static int pozicija=MAX_POZICIJA_MOTORJA;
+static int pozicija=MAX_POZICIJA_MOTORJA; //na startu misli da je cisto zaprt
 static uint32_t micros_prej=micros();
 bool knof=0;
 //ZAKOMENTIRANI DELI KER TESTIRAM ČE JE KUL
@@ -637,16 +635,16 @@ for(int i=stevilo_korakov;(i>0)&&(pozicija!=poz_cilj)&&(!knof);--i){
             //Zapiše izbrano stanje na pin za korak
             digitalWrite(PIN_STEP1_STEP, currentState);}
     }}
-if(((!digitalRead(END_SWITCH))&&(stepsPerSecond>0))&&(pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0))
+//if(pozicija==0)sem_ze_na_nuli++; //lahko vpelješ error code če je ful dolg cajta na nuli in falil end switch
+if((!digitalRead(END_SWITCH))&&(stepsPerSecond>0)) //||((sem_ze_na_nuli>MAX_POMOTA_ODPIRANJA)&&(stepsPerSecond>0)) lahko dodaten pogoj
 { knof=1; //splošna spremenljivka ki naznani doseg ekstrema
   pozicija=0;
-//micros_prej=micros();
 }
     }    
         digitalWrite(PIN_STEP1_STEP, LOW); //dodatna vrstica, preventivno da drži motor pri miru  
 //ponastavimo pozicijo, če roža zadane end switch. Vmes od zadnjega proženja morata miniti vsaj 2 sekundi + DEMO_CAKANJE
 
-
+//pri poziciji 0 se neha vrtet, preventiva-ish
 #if DEBUG_MOTOR
 Serial.print("pogoj1: ");Serial.print(pozicija>MAX_POZICIJA_MOTORJA && smer>0);
 Serial.print(" | pogoj2: ");Serial.print(pozicija==0 && smer<0);
