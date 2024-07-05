@@ -57,6 +57,7 @@
 #define MODE_CHANGE_WAIT 3000
 
 #define END_SWITCH_TIMEOUT 20000000
+#define OPENING_TIMEOUT 20000000
 
 #define EEG_POSKUSI 10000
 
@@ -567,6 +568,15 @@ digitalWrite(START_LED,0);
     if((micros()-zacetni_cas_homanja)>END_SWITCH_TIMEOUT)break;//ce se homea predolg prekini homeanje
     digitalWrite(START_LED,utrip);
     utrip=!utrip;}
+  //ko se home-a (odpre) se potem še zapre:
+  delay(1000);
+
+  zacetni_cas_homanja=micros();
+  while(!(vrtenje(2000,0,1000,-1))){
+    if((micros()-zacetni_cas_homanja)>OPENING_TIMEOUT)break;//ce se homea predolg prekini homeanje
+    digitalWrite(START_LED,utrip);
+    utrip=!utrip;}
+    
 }
 //----------------------------------------------------------------------------------------------
 //funkcija za vrtenje motorja:
@@ -577,8 +587,9 @@ digitalWrite(START_LED,0);
 bool vrtenje(int hitrost, bool smer, int stevilo_korakov,int poz_cilj){ //če ne želimo uporabljati regulacij nastavimo cilj na -1
 // +/TRUE smer je odpiranje, -/FALSE smer je zapiranje
 static int stepsPerSecond;
-static int pozicija=32300;
+static int pozicija=MAX_POZICIJA_MOTORJA;
 static uint32_t micros_prej=micros();
+bool knof=0;
 //ZAKOMENTIRANI DELI KER TESTIRAM ČE JE KUL
 #if DEBUG_MOTOR
 Serial.println("vrtim");
@@ -594,7 +605,7 @@ else stepsPerSecond = -hitrost;}
 else if (pozicija<poz_cilj) {stepsPerSecond = -hitrost;} //PREVERI PREDZNAKE!!!!
 else stepsPerSecond = hitrost;
  //če poz>0 ni ok daj nazaj >-32348
-for(int i=stevilo_korakov;(i>0)&&(pozicija!=poz_cilj);--i){
+for(int i=stevilo_korakov;(i>0)&&(pozicija!=poz_cilj)&&(!knof);--i){
    if (((stepsPerSecond > 0) && (pozicija > 0))||((stepsPerSecond < 0) && (pozicija < MAX_POZICIJA_MOTORJA))) 
    {
     static unsigned long nextChange = 0;
@@ -625,13 +636,16 @@ for(int i=stevilo_korakov;(i>0)&&(pozicija!=poz_cilj);--i){
 
             //Zapiše izbrano stanje na pin za korak
             digitalWrite(PIN_STEP1_STEP, currentState);}
-    }}}    
-        digitalWrite(PIN_STEP1_STEP, LOW); //dodatna vrstica, preventivno da drži motor pri miru  
-//ponastavimo pozicijo, če roža zadane end switch. Vmes od zadnjega proženja morata miniti vsaj 2 sekundi + DEMO_CAKANJE
-if((!digitalRead(END_SWITCH))&&(stepsPerSecond>0))
-{pozicija=0;
+    }}
+if(((!digitalRead(END_SWITCH))&&(stepsPerSecond>0))&&(pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0))
+{ knof=1; //splošna spremenljivka ki naznani doseg ekstrema
+  pozicija=0;
 //micros_prej=micros();
 }
+    }    
+        digitalWrite(PIN_STEP1_STEP, LOW); //dodatna vrstica, preventivno da drži motor pri miru  
+//ponastavimo pozicijo, če roža zadane end switch. Vmes od zadnjega proženja morata miniti vsaj 2 sekundi + DEMO_CAKANJE
+
 
 #if DEBUG_MOTOR
 Serial.print("pogoj1: ");Serial.print(pozicija>MAX_POZICIJA_MOTORJA && smer>0);
@@ -641,7 +655,8 @@ Serial.print("pozicija: ");Serial.print(pozicija);
 Serial.print(" | hitr: ");Serial.println(stepsPerSecond);
 #endif
 //vrne če je roža prišla do keregakol ekstrema ali pa do cilja
-return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0) || (pozicija==0 && stepsPerSecond>0) || (pozicija==poz_cilj));
+//return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0) || (pozicija==0 && stepsPerSecond>0) || (pozicija==poz_cilj));
+return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0) || (knof) || (pozicija==poz_cilj));
 }
 //------------------------------------------------------------------------------------------------
 // funkcija za konfiguracijo glede na nastavitve na UI plošči
