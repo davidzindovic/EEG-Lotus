@@ -2,24 +2,25 @@
 
 ////////////////////////////////////////////////////////////
 /*                                                       
-      1. Priključi napravo na napajanje
+      1. Priključi napravo na napajanje in počakaj,
+         da se skalibrira (odpre in zapre)
       2. Vzemi UI ploščo
       3. Nastavi željene nastavitve
       4. Pritisni gumb start
       5. Odloži pločico nazaj (glej START LED) in umakni roko
 
-      Vsakič, ko boš odstranil UI ploščo, se bo roža zaprla
-      in boš lahko nadaljeval postopek od koraka 3. Obstoječe
-      meritve bodo po zbrisane.
+      Vsakič, ko boš odstranil UI ploščo, se bo roža odprla in
+      zaprla, za tem boš lahko nadaljeval postopek od
+      koraka 3. Obstoječe meritve bodo po zbrisane.
 */
 /////////////////////////////////////////////////////////////
 
-//mindwave.h, objekti, funkcija se bo mogoče odstranila
+//za namen python loggerja je potrebno urediti serijske izpise
 
 #include <Mindwave.h>
 
 //Knjižnica za komuniciranje s HC-05 bluetooth modulom
-//(da lahko uporabljamo serijsko komunikacijo s PC-om)
+//(da lahko uporabljamo serijsko komunikacijo s PC-om):
 #include <AltSoftSerial.h>
 
 //VEZAVA ZA GONILNIK ZA KORAČNI MOTOR:
@@ -41,14 +42,13 @@
 
 #define BAUDRATE 57600      //BAUDRATE ZA MINDWAVE MOBILE
 
-//hardcore hall vrednosti. Ponovno pomeri in spremeni v primeru spremembe pri magnetih:
+//hardcode hall vrednosti. Ponovno pomeri in spremeni v primeru spremembe pri magnetih:
 #define HALL_SENSOR_AVRG 475
 #define HALL_SENSOR_WIGGLE_ROOM 15
 
-//#define MLOOP 10000
 #define HITROST_MOTORJA 2000
 #define KORAKI_MOTORJA 2000
-#define MAX_SPREMEMBA 8 //se da spreminjat pomojm
+#define MAX_SPREMEMBA 8 //nastavljeno s preizkušanjem
 #define MAX_POZICIJA_MOTORJA 29600  //1600 obratov @ 2000speed = 1 obrat; 
 //~18.5 obratov je do odprtja -> 1600*18.5=29600
 
@@ -56,12 +56,10 @@
 #define DEMO_CAKANJE 3000   //čas pavze pri demo načinu
 #define MODE_CHANGE_WAIT 3000
 
-#define END_SWITCH_TIMEOUT 30000000
-#define OPENING_TIMEOUT 30000000 //enak cas predviden za doseg obeh ekstremov
-
-#define MAX_POMOTA_ODPIRANJA 100 //kolikokrat lahko for loop deluje, če je na nuli(pozicija) in end switch ne prime
-
-#define EEG_POSKUSI 10000
+//če se ne odpre/zapre v omejenem času naj naprava sklepa, da nekaj ni ok
+//in prekine obratovanje
+#define END_SWITCH_TIMEOUT 40000000
+#define OPENING_TIMEOUT 40000000 //enak cas predviden za doseg obeh ekstremov
 
 //za odpiranje DEBUG izpisov na serijcu spremeni v 1:
 #define DEBUG_GENERIC 0
@@ -70,21 +68,13 @@
 #define DEBUG_REGULACIJE 0
 #define CSVLOG 0
 
-//#define MINDWAVE_BAUDRATE 57600
-
-//inicializiramo še en serial stream:
-//SoftwareSerial bluetooth(A2,8);
-AltSoftSerial bluetooth;
+AltSoftSerial bluetooth;//inicializiramo še en serial stream
 Mindwave mindwave;
 
+//globalna spremenljivka, ki hrani vrednost umirjenosti:
 uint8_t umir=0;
 
 void setup() {
-
- // Timer1.initialize(1000000);
- //Timer1.attachInterrupt(test);
-  //Timer1.stop();
-//  delay(10);
   
   //inicializiramo pine za gonilnik;
   pinMode(PIN_STEP_ENABLE,OUTPUT);
@@ -105,8 +95,7 @@ void setup() {
 
   pinMode(HALL_SENSOR,INPUT);
 
-
-  //zaženemo software serial:
+  //zaženemo umetno serijsko komunikacijo:
   bluetooth.begin(MINDWAVE_BAUDRATE);
   
   Serial.begin(MINDWAVE_BAUDRATE);
@@ -120,44 +109,53 @@ void setup() {
 
 void loop() {
 
-//pazi orientacijo močnejšega magneta:
-//static uint16_t HALL_SENSOR_AVRG=analogRead(HALL_SENSOR); //preberemo mirovno vrednost hall senzorja
-//static uint16_t HALL_SENSOR_WIGGLE_ROOM=40;              //določimo možno odstopanje (je večje zaradi močnejšega magneta
-static bool first_nastavitve=1;                           //spremenljivka za prvotno nastavitev
+static bool first_nastavitve=1;  //spremenljivka za prvotno nastavitev
 static byte nastavitve;
 static bool ponovna_nastavitev=0;
-//static bool toggle=0;
 
+//maske za stikala:
 byte mask_demo=0b100;
 byte mask_log=0b010;
 byte mask_roza=0b001;
 
 // prvič, ko zaženemo program, pridemo v ui_config in spremenimo flag, da ne pridemo več v ta del programa
 if(first_nastavitve){nastavitve=ui_config();first_nastavitve=!first_nastavitve;}
-//while(1){mindwave.update(bluetooth,onMindwaveData);}
 
-//spremenjen pogoj zaradi zamenjave orientacije senzorja:
+//po pritisku na tipko start skočimo ven iz ui_config in čakamo, da uporabnik odloži
+//uporabniški vmesnik, pri čemer beremo hall senzor in primerjamo z vnaprej nastavljenimi vrednostmi
 while(analogRead(HALL_SENSOR)>=(HALL_SENSOR_AVRG+HALL_SENSOR_WIGGLE_ROOM)){
+  //če smo izbrali merjenje si damo headstart da se komunikacija čim prej začne: 
   if((nastavitve&mask_log)==2){for(int c=0;c<100;c++)mindwave.update(bluetooth,onMindwaveData);}
+  
   #if DEBUG_GENERIC
   Serial.print("CAKAM DA ODLOZIS UI PLATO | HALL_SENOZOR:");
   Serial.print(analogRead(HALL_SENSOR));
-  Serial.print("Povprečje HALL: ");
+  Serial.print("  Povprečje HALL: ");
   Serial.print(HALL_SENSOR_AVRG);
   Serial.print(" +/- ");
   Serial.println(HALL_SENSOR_WIGGLE_ROOM);
   #endif
-  } //dokler je UI plošča odmaknjena naprava čaka
+  }
 
 delay(SAFETY_CAKANJE); // po potrditvi konfiguracije in odložitvi ploščice ima uporabnik SAFETY_CAKANJE/1000 sekund da umakne roko
+
+//prvic po prizigu preskočimo, ker smo home-ali že v setupu,
+//sicer pa home-amo vsakič med po preklopu načina oz. zagonu:
 if(ponovna_nastavitev)zapiranje_roze();
+
+//pokažemo izbran način obratovanja preko LED na UI:
 digitalWrite(ROZA_LED,(nastavitve&mask_roza)==1);
 digitalWrite(CSVLOG_LED,(nastavitve&mask_log)==2);
 digitalWrite(DEMO_LED,(nastavitve&mask_demo)==4);
 digitalWrite(START_LED,1);
+
 delay(MODE_CHANGE_WAIT);
+
 if(!ponovna_nastavitev)ponovna_nastavitev=1;
+
+//dokler je plošča odložena obratuje:
 while((analogRead(HALL_SENSOR)<=(HALL_SENSOR_AVRG+HALL_SENSOR_WIGGLE_ROOM)) ){
+  
 #if DEBUG_GENERIC
 Serial.print("GARBAM\n  parametri:");
 Serial.print((nastavitve&mask_demo)==4);
@@ -165,30 +163,37 @@ Serial.print((nastavitve&mask_log)==2);
 Serial.println((nastavitve&mask_roza)==1);
 Serial.print("HALL: ");Serial.println(Serial.print(analogRead(HALL_SENSOR)));
 #endif
-//digitalWrite(DEMO_LED,toggle);toggle=!toggle;
+
+//Funkcija za obratovanje:
 ObdelavaPodatkov((nastavitve&mask_demo)==4,(nastavitve&mask_log)==2,(nastavitve&mask_roza)==1,ponovna_nastavitev);
+
 if(ponovna_nastavitev)ponovna_nastavitev=0;
 }
+
 #if DEBUG_GENERIC
 Serial.println("NE GARBAM");
 #endif
 
+// če smo merili pošjemo stop da python neha beležiti podatke
 #if CSVLOG
-if((nastavitve&mask_log)<=3&&(nastavitve&mask_log)>=1)Serial.println("stop"); // če smo merili pošjemo stop da python neha beležiti podatke
+if((nastavitve&mask_log)<=3&&(nastavitve&mask_log)>=1)Serial.println("stop");
 #endif
+
+//po izhodu preverimo nov izbor:
 nastavitve=ui_config();
 ponovna_nastavitev=1;
-//delay(MODE_CHANGE_WAIT);
-//zapiranje_roze();
-
 
 }
+
+//################################# FUNKCIJE #######################################
+
 //-----------------------------------------------------------------------------------------------
 
 // funkcija za mindwave mobile in preostanek (vendar posebna knjižnica:):
 void onMindwaveData(){
 
 umir=mindwave.meditation();
+
 #if DEBUG_MERITVE
 Serial.print("umirjenost data: ");
 Serial.println(umir);
@@ -196,174 +201,49 @@ Serial.println(umir);
 }
 
 //---------------------------------------------------------------------------------------------
-//Funkcija za branje enega byte-a iz payload stream-a (od software serial, lahko je tudi navaden serial)
-//VRNE prebran byte
-/*int ReadOneByte() {
-  int ByteRead;
+//Funkcija, ki nameni procesorski čas zgolj sinhronizaciji in prejemu podatkov o umirjenosti uporabnika
 
-  //while(!bluetooth.available())Serial.println("nema"); //počakamo, dokler ne dobimo nečesa za prebrat
-  ByteRead = bluetooth.read();   // preberemo bajt
+//Kot vhodno spremenljivko prejme podatek, če naj kliče regulacijo po prejetju meritev
 
-#if DEBUG_EEG
-  Serial.println("prebral");
-  //Serial.println((char)ByteRead);   // echo the same byte out the USB serial (for debug purposes)
-#endif
-
-  return ByteRead;
-}*/
-//--------------------------------------------------------------------------------------------
-//Funkcija za branje EEG oz. obdelavo payloada od Neurosky:
-/*
-void EEG()
-{
-  
-  //Serial.println("EEG");
-// checksum variables
-//byte generatedChecksum = 0;
-uint16_t generatedChecksum = 0;
-byte checksum = 0; 
-int payloadLength = 0;
-byte payloadData[64] = {0};
-byte poorQuality = 0;
-//byte attention = 0; //če želimo zvedeti fokus, odkomentiramo
-//byte meditation = 0;
-
-// system variables
-long lastReceivedPacket = 0;
-boolean bigPacket = false;
-static bool bruh=0;
-  
-  // Look for sync bytes
-  if(bluetooth.read() == 170) {
-    if(bluetooth.read() == 170) {
-
-      payloadLength = bluetooth.read();
- 
-   if(payloadLength > 169)return;       
-      generatedChecksum = 0;        
-      for(int i = 0; i < payloadLength; i++) {  
-        payloadData[i] = bluetooth.read();            //Read payload into memory
-        generatedChecksum += payloadData[i];
-      }   
-
-      checksum = bluetooth.read();                      //Read checksum byte from stream      
-      generatedChecksum = 255 - generatedChecksum;   //Take one's compliment of generated checksum
-
-        if(checksum == generatedChecksum) {    
-    //Serial.println("!!!!!!!!!!!!!!!!!!!!!!");
-        poorQuality = 200;
-       // attention = 0;
-        //meditation = 0;
-        umir=0;
-        for(int i = 0; i < payloadLength; i++) {    // Parse the payload
-          switch (payloadData[i]) {
-          case 2:
-            i++;            
-            poorQuality = payloadData[i];
-            bigPacket = true;            
-            break;
-          case 4:
-            i++;
-            //če bi potrebovali fokus, odkomentiramo:
-            //attention = payloadData[i];                        
-            break;
-          case 5:
-            i++;
-            //shranimo v umirjenost_pointer za umirjenost
-            umir= payloadData[i];
-            break;
-          case 0x80:
-            i = i + 3;
-            break;
-          case 0x83:
-            i = i + 25;      
-            break;
-          default:
-            break;
-          } // switch
-        } // for loop
-        
-#if DEBUG_EEG
-        //erial.println("EEG");
-        if(bigPacket) {
-          Serial.print("PoorQuality: ");
-          Serial.println(poorQuality, DEC);
-          Serial.print(" Umirjenost: ");
-          Serial.println(umir, DEC);
-          Serial.print("\n");
-                    
-        }
-#endif        
-        bigPacket = false;        
-      }
-      else {
-        // Checksum Error
-      }  // end if else for checksum
-    } // end if read 0xAA byte
-  } // end if read 0xAA byte
-
-Serial.println("o");
-//noInterrupts();
-//uint8_t prej=umir;
-//uint32_t cnt=0;
-//for(int i=0;i<(EEG_POSKUSI*10);i++)
-//while((umir==prej)/*&&(cnt<1000))*/
-//{
-//mindwave.update(bluetooth,onMindwaveData);
-//cnt++;
-//}
-//interrupts();
-//Serial.println(mindwave.meditation());
-//Serial.println("a");
-//}
-//------------------------------------------------------------------------------- 
-
-void meritvice(bool ali_reguliram){
+void merjenja(bool ali_reguliram){
   
   static bool ledica=0;
   uint8_t eeg_prej=umir;
 
-  //načeloma za toglanje, ampak ga while preglasi:
   if(bluetooth.available()>0){
   digitalWrite(CSVLOG_LED,ledica);
   ledica=!ledica;
   }
 
   //dokler smo v loopou gorita rdeča in rumena lučka CSVLOG
+  //v loopu smo dokler se ne spremeni vrednost umirjenosti
   while(umir==eeg_prej){
   mindwave.update(bluetooth,onMindwaveData);
   digitalWrite(CSVLOG_LED,ledica);
   ledica=!ledica;
   }
+
+  //na podlagi vhodnega parametra kličemo funkcijo za regulacijo:
   if(ali_reguliram)regulacija(umir);
   
   }
 //----------------------------------------------------------------------------
 // Funkcija za obdelavo podatkov:
 // VHODNI parametri: nastavitev stikal na UI plošči (DEMO, CSVLOG, ODPIRANJE ROŽE)
+//                   podatek o ponastavitvi nastavitev/meritev
+
 void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settings) {
   
   //demo mode spremenljivki:
   static bool demo_flag=0; //če sem prišel do zgornje ali spodnje meje
   static bool smer=0;      // da lahko spreminjam smer vrtejna v demo mode
 
-  static bool print_flag=1;
-  // spremenljivki za meritve:
   static byte stevec_meritev=0;
-  //static bool nastavitev_meritev=1;
   const byte ST_POVPRECIJ=30;
   static uint16_t meritve[ST_POVPRECIJ];
-  //static bool eeg_kalibracija=1;
   static unsigned long prejle=0;
 
-  //static uint8_t umirjenost=0;
   static uint8_t umirjenost_prej=0;
-  
-  //Je v #define
-  //static int HITROST_MOTORJA=2000;
-  //static int KORAKI_MOTORJA=10000;
-
-
   
   //prvic po inicializaciji arraya meritev ga zafilamo z ničlami
   //oz. resetiramo ob ponovnem zagonu/spremembi mode-a:
@@ -371,11 +251,6 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   {
     for(byte a=0;a<ST_POVPRECIJ;a++)meritve[a]=0;
   }
-  
-//a bo potrebno preden kličeš motorje shranit vrednost od micros()??
-
-//ZA STESTIRAT:!!!!!!
-//vrtenje(2000,1,100); 
   
   #if DEBUG_GENERIC
   Serial.print("Demo argument: ");Serial.println(demo);
@@ -385,24 +260,30 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
 
   // demo mode:
   if(demo){demo_flag=vrtenje(HITROST_MOTORJA,smer,KORAKI_MOTORJA,-1);}
+  
   //ko roža pride do software maksimuma oz. do end switcha, flaga demo_flag na "1":
   if(demo_flag){
   smer=!smer; //spremenimo smer
+  
   #if DEBUG_MOTOR
   Serial.println("smer swap");
   #endif
+  
   demo_flag=0;//ponastavimo demo_flag
-  delay(DEMO_CAKANJE); //počakamo, da se lahko nagledamo odpre/zaprte rože
+  delay(DEMO_CAKANJE); //počakamo, da se lahko nagledamo odprte/zaprte rože
   }
   
-  //če se odločimo za CSVLOG ali odpiranje ROŽE
+  //če se odločimo za meritve ali odpiranje ROŽE glede na umirjenost
   else if(ali_merim||odpiranje) //z else if damo prednost demo-tu
   {  
-    if(abs(micros()-prejle)>1000000){meritvice(odpiranje);prejle=micros();}
+    //vsako sekundo namenimo procesorski čas prejemanju izmerjenih podatkov:
+    if(abs(micros()-prejle)>1000000){merjenja(odpiranje);prejle=micros();}
+    
   //za izpis na zaslonu računalnika (CSVLOG):
   if(ali_merim){ //merjenje je samo za beleženje in povprečenje
 
   #if DEBUG_MERITVE
+  static bool print_flag=1;
   if(print_flag){
   Serial.print("Aktivno povprečje(0) ali povprečje zadnjih 30 meritev(1)? ");
   Serial.println(meritve[ST_POVPRECIJ-1]!=0); //s tem ve če PC izpise "aktivno povprečje" ali "povprečje zadnjih 30 meritev"
@@ -413,17 +294,13 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   Serial.println(meritve[ST_POVPRECIJ]!=0);
   #endif
   
-  
-  // za ponastavitev kazalca v arrayu
+  // za ponastavitev kazalca v arrayu:
   if(stevec_meritev==ST_POVPRECIJ){stevec_meritev=0;
   #if DEBUG_MERITVE
   Serial.println("stevec_meritev reset!");
   #endif
   }
   
-
-
-
   //Izmerjen nivo umirjenosti shranimo v array 
   //in premaknemo umirjenost_pointer na naslednje mesto:
   if(umirjenost_prej!=umir){
@@ -441,8 +318,7 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
     Serial.println(umir);
     #endif
 
-
-  //izračunamo povprečje in izpišemo glede na spremenljivko ali_merim:
+  //izračunamo povprečje in izpišemo glede na spremenljivko ali_merim (python log):
   uint16_t povprecje=0;
   for(uint16_t a=0;a<ST_POVPRECIJ;a++)
   {
@@ -480,26 +356,26 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
     }
   }}
   }
-  //regulacija ne naredi ničesar če je odpiranje=0
-  //regulacija(meditacija,odpiranje); //mora bit vse po branju EEG v funkciji ker sicer nastanejo težave
   }
 }
 //-------------------------------------------------------------------------------------------------------
-//funkcija za regulacijo:
+//Funkcija za regulacijo:
+//Kot vhodni parameter prejme trenutno stanje umirjenosti
+
 void regulacija(int trenutno_stanje)
-{static bool first_reg=false;
+{
+static bool first_reg=false;
 static int pozicija_cilj=1;
 static int motor=0;
 static int delta_motor=0;
 int regulacijsko_povprecje;
 static int meditacija_prej;
-static uint8_t prevent;
 
 if(first_reg!=false || trenutno_stanje!=0) //preventiva za prvo izvedbo
 { // upoštevamo novo vrednost meditacije oz. umirjenosti in pomnimo le zadnjo prejšnjo:
  if (first_reg==false)
   {
-  if(trenutno_stanje!=meditacija_prej)meditacija_prej=trenutno_stanje;//regulacija(meditacija_prej,trenutno_stanje);
+  if(trenutno_stanje!=meditacija_prej)meditacija_prej=trenutno_stanje;
   first_reg=!first_reg;
   }
  else
@@ -535,43 +411,46 @@ else if (motor<0) motor=0;
 pozicija_cilj=map(motor,0,100,0,MAX_POZICIJA_MOTORJA);
 
 #if DEBUG_REGULACIJE
-//Serial.print("Pozicija: ");
-//Serial.print(pozicija);
 Serial.print(" | Pozicija cilj: ");
 Serial.println(pozicija_cilj);
 #endif
-prevent=0;
+
+
 // zančno primerjamo trenutno in ciljno pozicijo ter obračamo motor
-while(!(vrtenje(HITROST_MOTORJA,0,KORAKI_MOTORJA,MAX_POZICIJA_MOTORJA-pozicija_cilj))) 
 // vmesni pogoj definira smer vrtenja
-{
-//manjsa cifra je bolj odprta roza, zato rabis max-trenutno futrat kot cilj
-}                                                                 
+while(!(vrtenje(HITROST_MOTORJA,0,KORAKI_MOTORJA,MAX_POZICIJA_MOTORJA-pozicija_cilj))) 
+{//manjsa cifra je bolj odprta roza, zato rabis max-trenutno futrat kot cilj
+}    
+                                                               
+}
 }
 
 //----------------------------------------------------------------------------------------------------------
 void zapiranje_roze()
-{//Funkcija, ki home-a napravo, torej zapre celo rožo
+{//Funkcija, ki home-a napravo, torej prvo zapre in nato odpre celo rožo
 
+//z vsemi rdečimi LED na UI plošči naznani home-anje:
 digitalWrite(ROZA_LED,0);
 digitalWrite(CSVLOG_LED,0);
 digitalWrite(DEMO_LED,0);
 digitalWrite(START_LED,0);
   
   bool utrip=0; //za heartbeat START_LED (sočasno brlita zelena in rdeča štart LED)
-  //zanka se izhvaja dokler funkcija vrtenje ne vrne "1" (torej se vrti dokler ne zadane END_SWITCH
-  //ODPIRANJE HOME ZARAD END SWITCHA
+  
+  //zanka se izhvaja dokler funkcija vrtenje ne vrne "1" (torej se vrti dokler ne zadane END_SWITCH)
+  //ODPIRANJE je prvo ZARAD END SWITCHA
   uint32_t zacetni_cas_homanja=micros();
   while(!(vrtenje(2000,1,1000,-1))){
     if((micros()-zacetni_cas_homanja)>END_SWITCH_TIMEOUT)break;//ce se homea predolg prekini homeanje
     digitalWrite(START_LED,utrip);
     utrip=!utrip;}
-  //ko se home-a (odpre) se potem še zapre:
+
   delay(1000);
 
+  //ko se home-a (odpre) se potem še zapre:
   zacetni_cas_homanja=micros();
   while(!(vrtenje(2000,0,1000,-1))){
-    if((micros()-zacetni_cas_homanja)>OPENING_TIMEOUT)break;//ce se homea predolg prekini homeanje
+    if((micros()-zacetni_cas_homanja)>OPENING_TIMEOUT)break;//ce se zapira predolg prekini proces
     digitalWrite(START_LED,utrip);
     utrip=!utrip;}
     
@@ -579,16 +458,19 @@ digitalWrite(START_LED,0);
 //----------------------------------------------------------------------------------------------
 //funkcija za vrtenje motorja:
 //VHODNI parametri: hitrost vrtenja, smer vrtenja (predznak hitrosti), število korako(ločljivost "korakov")
+//in tudi ciljna pozicija (če je -1 se ignorira parameter)
 //-> manjše število korakov pomeni hitrejša izvedba for zanke in vrnitev ven iz funkcije
-//VRNE: informacijo, če se je roža do konca zaprla (beremo stikalo END_SWITCH), ali pa do konca odprla (če je pozicija na definiranem maksimumu)
+//VRNE: informacijo, če se je roža do konca zaprla (beremo stikalo END_SWITCH),do konca odprla (če je pozicija na definiranem maksimumu)
+//      ali pa če je dosegla ciljno pozicijo
 
-bool vrtenje(int hitrost, bool smer, int stevilo_korakov,int poz_cilj){ //če ne želimo uporabljati regulacij nastavimo cilj na -1
+bool vrtenje(int hitrost, bool smer, int stevilo_korakov,int poz_cilj)
+{ //če ne želimo uporabljati regulacij nastavimo cilj na -1
 // +/TRUE smer je odpiranje, -/FALSE smer je zapiranje
 static int stepsPerSecond;
 static int pozicija=MAX_POZICIJA_MOTORJA; //na startu misli da je cisto zaprt
 static uint32_t micros_prej=micros();
 bool knof=0;
-//ZAKOMENTIRANI DELI KER TESTIRAM ČE JE KUL
+
 #if DEBUG_MOTOR
 Serial.println("vrtim");
 Serial.print("hitrost: ");Serial.print(hitrost);
@@ -600,9 +482,9 @@ Serial.print(" | st_korakov: ");Serial.println(stevilo_korakov);
 if(poz_cilj==-1){
 if(smer) stepsPerSecond = hitrost;
 else stepsPerSecond = -hitrost;}
-else if (pozicija<poz_cilj) {stepsPerSecond = -hitrost;} //PREVERI PREDZNAKE!!!!
+else if (pozicija<poz_cilj) {stepsPerSecond = -hitrost;}
 else stepsPerSecond = hitrost;
- //če poz>0 ni ok daj nazaj >-32348
+
 for(int i=stevilo_korakov;(i>0)&&(pozicija!=poz_cilj)&&(!knof);--i){
    if (((stepsPerSecond > 0) && (pozicija > 0))||((stepsPerSecond < 0) && (pozicija < MAX_POZICIJA_MOTORJA))) 
    {
@@ -635,16 +517,14 @@ for(int i=stevilo_korakov;(i>0)&&(pozicija!=poz_cilj)&&(!knof);--i){
             //Zapiše izbrano stanje na pin za korak
             digitalWrite(PIN_STEP1_STEP, currentState);}
     }}
-//if(pozicija==0)sem_ze_na_nuli++; //lahko vpelješ error code če je ful dolg cajta na nuli in falil end switch
-if((!digitalRead(END_SWITCH))&&(stepsPerSecond>0)) //||((sem_ze_na_nuli>MAX_POMOTA_ODPIRANJA)&&(stepsPerSecond>0)) lahko dodaten pogoj
-{ knof=1; //splošna spremenljivka ki naznani doseg ekstrema
+
+if((!digitalRead(END_SWITCH))&&(stepsPerSecond>0))
+{ knof=1; //spremenljivka, ki naznani doseg ekstrema
   pozicija=0;
 }
-    }    
-        digitalWrite(PIN_STEP1_STEP, LOW); //dodatna vrstica, preventivno da drži motor pri miru  
-//ponastavimo pozicijo, če roža zadane end switch. Vmes od zadnjega proženja morata miniti vsaj 2 sekundi + DEMO_CAKANJE
+}    
+digitalWrite(PIN_STEP1_STEP, LOW); //dodatna vrstica, preventivno da drži motor pri miru  
 
-//pri poziciji 0 se neha vrtet, preventiva-ish
 #if DEBUG_MOTOR
 Serial.print("pogoj1: ");Serial.print(pozicija>MAX_POZICIJA_MOTORJA && smer>0);
 Serial.print(" | pogoj2: ");Serial.print(pozicija==0 && smer<0);
@@ -652,8 +532,8 @@ Serial.print(" | pogoj3: ");Serial.println(!digitalRead(END_SWITCH));
 Serial.print("pozicija: ");Serial.print(pozicija);
 Serial.print(" | hitr: ");Serial.println(stepsPerSecond);
 #endif
-//vrne če je roža prišla do keregakol ekstrema ali pa do cilja
-//return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0) || (pozicija==0 && stepsPerSecond>0) || (pozicija==poz_cilj));
+
+//vrne "1" če je roža prišla do keregakol ekstrema ali pa do cilja
 return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0) || (knof) || (pozicija==poz_cilj));
 }
 //------------------------------------------------------------------------------------------------
@@ -661,6 +541,7 @@ return((pozicija>=MAX_POZICIJA_MOTORJA && stepsPerSecond<0) || (knof) || (pozici
 // vrne masko glede na pritisnjena stikala: DEMO,LOG,ROŽA
 byte ui_config(void){
 
+// maski za beleženje meritev:
 byte mask_log=0b010;
 byte mask_roza=0b001;
 
@@ -686,7 +567,7 @@ digitalWrite(CSVLOG_LED,csvlog_stikalo);
 digitalWrite(DEMO_LED,demo_stikalo);
 }
 
-start_gumb=0;//resetiramo spremenljivko
+start_gumb=0;//ponastavimo spremenljivko
 
 //izpis "mode"-ov za python interface,
 //če je pritisnjeno stikalo za CSVLOG:
