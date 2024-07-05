@@ -64,7 +64,7 @@
 #define DEBUG_GENERIC 0
 #define DEBUG_MOTOR 0
 #define DEBUG_MERITVE 0
-#define DEBUG_REGULACIJE 0
+#define DEBUG_REGULACIJE 1
 #define CSVLOG 0
 
 //#define MINDWAVE_BAUDRATE 57600
@@ -371,7 +371,6 @@ void ObdelavaPodatkov(bool demo,bool ali_merim, bool odpiranje,bool reset_settin
   }
   
 //a bo potrebno preden kličeš motorje shranit vrednost od micros()??
-if(abs(micros()-prejle)>1000000){meritvice(odpiranje);prejle=micros();}
 
 //ZA STESTIRAT:!!!!!!
 //vrtenje(2000,1,100); 
@@ -400,7 +399,7 @@ if(abs(micros()-prejle)>1000000){meritvice(odpiranje);prejle=micros();}
   
   //za izpis na zaslonu računalnika (CSVLOG):
   if(ali_merim){
-    
+  if(abs(micros()-prejle)>1000000){meritvice(odpiranje);prejle=micros();}
   #if DEBUG_MERITVE
   if(print_flag){
   Serial.print("Aktivno povprečje(0) ali povprečje zadnjih 30 meritev(1)? ");
@@ -485,13 +484,14 @@ if(abs(micros()-prejle)>1000000){meritvice(odpiranje);prejle=micros();}
 }
 //-------------------------------------------------------------------------------------------------------
 //funkcija za regulacijo:
-void regulacija(unsigned int trenutno_stanje)
+void regulacija(int trenutno_stanje)
 {static bool first_reg=false;
-static unsigned int pozicija_cilj;
+static int pozicija_cilj=1;
 static int motor=0;
 static int delta_motor=0;
 int regulacijsko_povprecje;
-static unsigned meditacija_prej;
+static int meditacija_prej;
+static uint8_t prevent;
 
 if(first_reg!=false || trenutno_stanje!=0) //preventiva za prvo izvedbo
 { // upoštevamo novo vrednost meditacije oz. umirjenosti in pomnimo le zadnjo prejšnjo:
@@ -530,7 +530,7 @@ if (motor>100) motor=100;
 else if (motor<0) motor=0;
 
 // mappamo od 0 do max obratov
-pozicija_cilj=map(motor,0,100,0,9534);
+pozicija_cilj=map(motor,0,100,0,MAX_POZICIJA_MOTORJA);
 
 #if DEBUG_REGULACIJE
 //Serial.print("Pozicija: ");
@@ -538,12 +538,15 @@ pozicija_cilj=map(motor,0,100,0,9534);
 Serial.print(" | Pozicija cilj: ");
 Serial.println(pozicija_cilj);
 #endif
-
+prevent=0;
 // zančno primerjamo trenutno in ciljno pozicijo ter obračamo motor
 while(!(vrtenje(HITROST_MOTORJA,0,KORAKI_MOTORJA,pozicija_cilj)))
 // vmesni pogoj definira smer vrtenja
 {
+
 //  vrtenje(HITROST_MOTORJA,pozicija<pozicija_cilj,KORAKI_MOTORJA,pozicija_cilj); // vmesni pogoj definira smer vrtenja
+//if(prevent>=10)break;
+//prevent++;
 }                                                                 
 }
 
@@ -574,8 +577,8 @@ digitalWrite(START_LED,0);
 bool vrtenje(int hitrost, bool smer, int stevilo_korakov,int poz_cilj){ //če ne želimo uporabljati regulacij nastavimo cilj na -1
 // +/TRUE smer je odpiranje, -/FALSE smer je zapiranje
 static int stepsPerSecond;
-static unsigned int pozicija=1;
-static uint32_t micros_prej=micros();;
+static int pozicija=32300;
+static uint32_t micros_prej=micros();
 //ZAKOMENTIRANI DELI KER TESTIRAM ČE JE KUL
 #if DEBUG_MOTOR
 Serial.println("vrtim");
@@ -585,11 +588,11 @@ Serial.print(" | st_korakov: ");Serial.println(stevilo_korakov);
 #endif
 
 // spremenljivka in predznak hitrosti določata če se spremenljivka pozicija povečuje ali zmanjšuje
-if(poz_cilj!=-1){
+if(poz_cilj==-1){
 if(smer) stepsPerSecond = hitrost;
 else stepsPerSecond = -hitrost;}
-else if (pozicija<poz_cilj) {stepsPerSecond = hitrost;} //PREVERI PREDZNAKE!!!!
-else stepsPerSecond = -hitrost;
+else if (pozicija<poz_cilj) {stepsPerSecond = -hitrost;} //PREVERI PREDZNAKE!!!!
+else stepsPerSecond = hitrost;
  //če poz>0 ni ok daj nazaj >-32348
 for(int i=stevilo_korakov;(i>0)&&(pozicija!=poz_cilj);--i){
    if (((stepsPerSecond > 0) && (pozicija > 0))||((stepsPerSecond < 0) && (pozicija < MAX_POZICIJA_MOTORJA))) 
@@ -629,6 +632,7 @@ if((!digitalRead(END_SWITCH))&&(stepsPerSecond>0))
 {pozicija=0;
 //micros_prej=micros();
 }
+
 #if DEBUG_MOTOR
 Serial.print("pogoj1: ");Serial.print(pozicija>MAX_POZICIJA_MOTORJA && smer>0);
 Serial.print(" | pogoj2: ");Serial.print(pozicija==0 && smer<0);
